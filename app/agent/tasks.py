@@ -2,7 +2,7 @@ import os
 from crewai import Agent, Task, Crew, LLM
 from crewai.project import CrewBase, agent, crew, task
 from django.utils import timezone
-from app.agent.models import JobPosting, Resume, JobRecommendation
+from agent.models import JobPosting, Resume, JobRecommendation
 from typing import Annotated
 import json
 

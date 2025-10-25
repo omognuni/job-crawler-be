@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from app.agent.models import JobPosting, Resume, JobRecommendation
+from agent.models import JobPosting, Resume, JobRecommendation
 
 
 class JobPostingSerializer(serializers.ModelSerializer):

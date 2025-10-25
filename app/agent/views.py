@@ -2,8 +2,8 @@ from rest_framework.viewsets import GenericViewSet, ModelViewSet
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework import status
-from app.agent.models import JobPosting, Resume, JobRecommendation
-from app.agent.serializers import JobPostingSerializer, ResumeSerializer, JobRecommendationSerializer
+from agent.models import JobPosting, Resume, JobRecommendation
+from agent.serializers import JobPostingSerializer, ResumeSerializer, JobRecommendationSerializer
 # Create your views here.
 class JobPostingViewSet(ModelViewSet):
     queryset = JobPosting.objects.all()

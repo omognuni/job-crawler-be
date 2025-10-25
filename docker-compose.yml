@@ -1,0 +1,33 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - 8000:8000
+    env_file:
+      - .env
+    environment:
+      - PYTHONPATH=/workspace
+    depends_on:
+      - db
+    volumes:
+      - ./app:/workspace/app
+      - /workspace/.venv
+    command: ["uv", "run", "python", "manage.py", "runserver", "0.0.0.0:8000"]
+    
+  db:
+    image: postgres:15
+    ports:
+      - 5432:5432
+    env_file:
+      - .env
+    environment:
+      - POSTGRES_USER=${DB_USER}
+      - POSTGRES_PASSWORD=${DB_PASS}
+      - POSTGRES_DB=${DB_NAME}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:

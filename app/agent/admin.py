@@ -1,6 +1,6 @@
 from django.contrib import admin
-from app.agent.models import JobPosting, Resume, JobRecommendation
-from app.agent.serializers import JobPostingSerializer, ResumeSerializer, JobRecommendationSerializer
+from agent.models import JobPosting, Resume, JobRecommendation
+from agent.serializers import JobPostingSerializer, ResumeSerializer, JobRecommendationSerializer
 
 @admin.register(JobPosting)
 class JobPostingAdmin(admin.ModelAdmin):
