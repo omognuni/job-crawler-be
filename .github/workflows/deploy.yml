@@ -160,4 +160,10 @@ jobs:
             exit 1
 
       - name: Notify deployment status
-        if: always() #
+        if: always() # 항상 실행
+        run: |
+          if [ "${{ job.status }}" == "success" ]; then
+            echo "✅ Deployment job successful!"
+          else
+            echo "❌ Deployment job failed!"
+          fi
