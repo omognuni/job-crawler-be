@@ -1,9 +1,7 @@
 services:
   app:
     container_name: app
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: ${PROD_IMAGE_NAME}
     ports:
       - ${PORT}:8000
     env_file:

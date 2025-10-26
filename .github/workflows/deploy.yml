@@ -14,18 +14,6 @@ on:
         options:
           - docker-registry
           - ssh-server
-      environment:
-        description: 'Deployment environment'
-        required: true
-        default: 'deploy'
-        type: choice
-        options:
-          - deploy
-      force_deploy:
-        description: 'Force deployment even if no changes'
-        required: false
-        default: false
-        type: boolean
 
 env:
   REGISTRY: ghcr.io
@@ -34,6 +22,8 @@ env:
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
+    # "deploy" 환경을 사용하도록 지정
+    # 모든 SSH/DB 관련 secrets은 이 "deploy" 환경에 저장해야 합니다.
     environment: deploy
     permissions:
       contents: read
@@ -59,8 +49,6 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            type=ref,event=branch
-            type=ref,event=pr
             type=sha,prefix={{branch}}-
             type=raw,value=latest,enable={{is_default_branch}}
 
@@ -74,17 +62,6 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Deploy to Docker Registry
-        if: (github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch') && (github.event.inputs.deployment_target == 'docker-registry' || github.event.inputs.deployment_target == null)
-        run: |
-          echo "📦 Docker image built and pushed to registry"
-          echo "Image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest"
-          echo "✅ Ready for deployment to your target server"
-          echo ""
-          echo "To deploy to your server, run:"
-          echo "1. docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest"
-          echo "2. docker compose -f docker-compose.prod.yml up -d"
-
       - name: Deploy to SSH Server
         if: github.event.inputs.deployment_target == 'ssh-server'
         uses: appleboy/ssh-action@v1.0.3
@@ -94,49 +71,65 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: ${{ secrets.SSH_PORT || 22 }}
           script: |
+            set -e # 오류 발생 시 스크립트 중단
+
+            DEPLOY_DIR="~/deployments/job-crawler-be"
+            REPO_DIR="$DEPLOY_DIR/repo" # 소스 코드를 별도 디렉터리에 관리
+            PROD_IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest"
+            
             echo "🚀 Starting deployment to SSH server"
+            mkdir -p $DEPLOY_DIR
+            cd $DEPLOY_DIR
+
+            # 1. Setup Deploy Key to clone private repo
+            echo "${{ secrets.DEPLOY_KEY }}" > deploy_key
+            chmod 600 deploy_key
+            export GIT_SSH_COMMAND="ssh -i deploy_key -o StrictHostKeyChecking=no"
             
-            # Create deployment directory
-            mkdir -p ~/deployments/job-crawler-be
-            cd ~/deployments/job-crawler-be
+            # 2. Clone or pull the repository
+            if [ -d "$REPO_DIR" ]; then
+              echo "🔄 Pulling latest code..."
+              cd $REPO_DIR
+              git reset --hard
+              git pull origin main
+            else
+              echo "Cloning repository..."
+              git clone git@github.com:${{ github.repository }}.git $REPO_DIR
+              cd $REPO_DIR
+            fi
             
-            # Download docker-compose files
-            curl -o docker-compose.prod.yml https://raw.githubusercontent.com/${{ github.repository }}/main/docker-compose.prod.yml
-            
-            # Create production environment file
+            # 3. Create production environment file
             cat > .env.prod << EOF
             SECRET_KEY=${{ secrets.SECRET_KEY }}
             DEBUG=False
             ALLOWED_HOSTS=${{ secrets.ALLOWED_HOSTS }}
-            
             PORT=${{ secrets.PORT }}
-
             DB_PORT=5432
             DB_HOST=db
             DB_NAME=${{ secrets.DB_NAME }}
             DB_PASS=${{ secrets.DB_PASS }}
             DB_USER=${{ secrets.DB_USER }}
-            
             OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
             GOOGLE_API_KEY=${{ secrets.GOOGLE_API_KEY }}
+            
+            # docker-compose.prod.yml에서 사용할 이미지 이름
+            PROD_IMAGE_NAME=${PROD_IMAGE}
             EOF
             
-            # Login to container registry
+            # 4. Login to container registry
             echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
             
-            # Stop existing containers
+            # 5. Pull latest image
+            docker pull $PROD_IMAGE_NAME
+            
+            # 6. Stop, remove old containers, and start new ones
             docker compose -f docker-compose.prod.yml --env-file .env.prod down || true
-            
-            # Pull latest image
-            docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
-            
-            # Update docker-compose to use the new image
-            sed -i "s|build:|image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest|g" docker-compose.prod.yml
-            sed -i "/dockerfile: Dockerfile/d" docker-compose.prod.yml
-            
-            # Start services
             docker compose -f docker-compose.prod.yml --env-file .env.prod up -d
             
+            # 7. Cleanup server
+            rm -f deploy_key # Remove deploy key
+            docker system prune -af # Remove old images/containers
+
             echo "✅ Deployment completed successfully"
 
       - name: Health check (SSH Server)
@@ -149,42 +142,22 @@ jobs:
           port: ${{ secrets.SSH_PORT || 22 }}
           script: |
             echo "🔍 Performing health check..."
+            sleep 20 # Wait for services to start
             
-            # Wait for services to start
-            sleep 30
+            PORT_TO_CHECK=${{ secrets.PORT || 8000 }}
             
-            # Check if the application is responding
             for i in {1..10}; do
-              if curl -f http://localhost:${{ secrets.PORT || 8000 }}/health/ || curl -f http://localhost:${{ secrets.PORT || 8000 }}/; then
+              # /health 또는 / 엔드포인트 확인
+              if curl -f "http://localhost:$PORT_TO_CHECK/health/" || curl -f "http://localhost:$PORT_TO_CHECK/"; then
                 echo "✅ Health check passed"
                 exit 0
               fi
-              echo "⏳ Waiting for application to start... (attempt $i/10)"
+              echo "⏳ Waiting for application... (attempt $i/10)"
               sleep 10
             done
             
             echo "❌ Health check failed"
             exit 1
 
-      - name: Health check (Other targets)
-        if: github.event.inputs.deployment_target != 'ssh-server' && github.event.inputs.deployment_target != null
-        run: |
-          echo "🔍 Health check skipped for ${{ github.event.inputs.deployment_target }}"
-          echo "Please check your deployment manually:"
-          echo "- Docker Registry: Pull and run the image on your server"
-
-      - name: Cleanup old images
-        if: always()
-        run: |
-          echo "🧹 Cleaning up old Docker images..."
-          docker image prune -f
-          docker system prune -f
-
       - name: Notify deployment status
-        if: always()
-        run: |
-          if [ "${{ job.status }}" == "success" ]; then
-            echo "✅ Deployment successful!"
-          else
-            echo "❌ Deployment failed!"
-          fi
+        if: always() #
