@@ -14,7 +14,13 @@ on:
         options:
           - docker-registry
           - ssh-server
-      environment: deploy
+      environment:
+        description: 'Deployment environment'
+        required: true
+        default: 'deploy'
+        type: choice
+        options:
+          - deploy
       force_deploy:
         description: 'Force deployment even if no changes'
         required: false
@@ -28,6 +34,7 @@ env:
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
+    environment: deploy
     permissions:
       contents: read
       packages: write
