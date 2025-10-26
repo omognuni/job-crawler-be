@@ -70,7 +70,7 @@ jobs:
           username: ${{ secrets.SSH_USERNAME }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: ${{ secrets.SSH_PORT || 22 }}
-script: |
+          script: |
             set -e # 오류 발생 시 스크립트 중단
 
             # 1. 경로 변수를 $HOME을 사용하여 절대 경로로 설정
@@ -133,7 +133,6 @@ script: |
             docker system prune -af # Remove old images/containers
 
             echo "✅ Deployment completed successfully"
-
       - name: Health check (SSH Server)
         if: github.event.inputs.deployment_target == 'ssh-server'
         uses: appleboy/ssh-action@v1.0.3
