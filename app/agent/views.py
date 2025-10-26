@@ -3,16 +3,23 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework import status
 from agent.models import JobPosting, Resume, JobRecommendation
-from agent.serializers import JobPostingSerializer, ResumeSerializer, JobRecommendationSerializer
-# Create your views here.
+from agent.serializers import (
+    JobPostingSerializer,
+    ResumeSerializer,
+    JobRecommendationSerializer,
+)
+
+
 class JobPostingViewSet(ModelViewSet):
     queryset = JobPosting.objects.all()
     serializer_class = JobPostingSerializer
-    
+
+
 class ResumeViewSet(ModelViewSet):
     queryset = Resume.objects.all()
     serializer_class = ResumeSerializer
-    
+
+
 class JobRecommendationViewSet(ModelViewSet):
     queryset = JobRecommendation.objects.all()
     serializer_class = JobRecommendationSerializer
