@@ -9,7 +9,7 @@ on:
       deployment_target:
         description: 'Deployment target'
         required: true
-        default: 'docker-registry'
+        default: 'ssh-server'
         type: choice
         options:
           - docker-registry
