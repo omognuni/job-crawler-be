@@ -1,0 +1,149 @@
+name: Deploy to Production
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        required: true
+        default: 'production'
+        type: choice
+        options:
+          - production
+          - staging
+      force_deploy:
+        description: 'Force deployment even if no changes'
+        required: false
+        default: false
+        type: boolean
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Deploy to production
+        if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
+        run: |
+          echo "🚀 Starting deployment to ${{ github.event.inputs.environment || 'production' }}"
+          
+          # Create deployment directory
+          mkdir -p ~/deployments/job-crawler-be
+          cd ~/deployments/job-crawler-be
+          
+          # Download docker-compose files
+          curl -o docker-compose.prod.yml https://raw.githubusercontent.com/${{ github.repository }}/main/docker-compose.prod.yml
+          
+          # Create production environment file
+          cat > .env << EOF
+          SECRET_KEY=${{ secrets.SECRET_KEY }}
+          DEBUG=False
+          ALLOWED_HOSTS=${{ secrets.ALLOWED_HOSTS }}
+          
+          PORT=${{ secrets.PORT }}
+
+          DB_PORT=5432
+          DB_HOST=db
+          DB_NAME=${{ secrets.DB_NAME }}
+          DB_PASS=${{ secrets.DB_PASS }}
+          DB_USER=${{ secrets.DB_USER }}
+          
+          OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
+          GOOGLE_API_KEY=${{ secrets.GOOGLE_API_KEY }}
+          EOF
+          
+          # Stop existing containers
+          docker-compose -f docker-compose.prod.yml --env-file .env.prod down || true
+          
+          # Pull latest image
+          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          
+          # Update docker-compose to use the new image
+          sed -i "s|build:|image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest|g" docker-compose.prod.yml
+          sed -i "/dockerfile: Dockerfile/d" docker-compose.prod.yml
+          
+          # Start services
+          docker-compose -f docker-compose.prod.yml --env-file .env.prod up -d
+          
+          echo "✅ Deployment completed successfully"
+
+      - name: Health check
+        if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
+        run: |
+          echo "🔍 Performing health check..."
+          
+          # Wait for services to start
+          sleep 30
+          
+          # Check if the application is responding
+          for i in {1..10}; do
+            if curl -f http://localhost:8000/health/ || curl -f http://localhost:8000/; then
+              echo "✅ Health check passed"
+              exit 0
+            fi
+            echo "⏳ Waiting for application to start... (attempt $i/10)"
+            sleep 10
+          done
+          
+          echo "❌ Health check failed"
+          exit 1
+
+      - name: Cleanup old images
+        if: always()
+        run: |
+          echo "🧹 Cleaning up old Docker images..."
+          docker image prune -f
+          docker system prune -f
+
+      - name: Notify deployment status
+        if: always()
+        run: |
+          if [ "${{ job.status }}" == "success" ]; then
+            echo "✅ Deployment successful!"
+          else
+            echo "❌ Deployment failed!"
+          fi
