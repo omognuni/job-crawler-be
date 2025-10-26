@@ -6,6 +6,14 @@ on:
       - main
   workflow_dispatch:
     inputs:
+      deployment_target:
+        description: 'Deployment target'
+        required: true
+        default: 'docker-registry'
+        type: choice
+        options:
+          - docker-registry
+          - ssh-server
       environment:
         description: 'Deployment environment'
         required: true
@@ -66,71 +74,104 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Deploy to production
-        if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
+      - name: Deploy to Docker Registry
+        if: (github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch') && (github.event.inputs.deployment_target == 'docker-registry' || github.event.inputs.deployment_target == null)
         run: |
-          echo "🚀 Starting deployment to ${{ github.event.inputs.environment || 'production' }}"
-          
-          # Create deployment directory
-          mkdir -p ~/deployments/job-crawler-be
-          cd ~/deployments/job-crawler-be
-          
-          # Download docker-compose files
-          curl -o docker-compose.prod.yml https://raw.githubusercontent.com/${{ github.repository }}/main/docker-compose.prod.yml
-          
-          # Create production environment file
-          cat > .env.prod << EOF
-          SECRET_KEY=${{ secrets.SECRET_KEY }}
-          DEBUG=False
-          ALLOWED_HOSTS=${{ secrets.ALLOWED_HOSTS }}
-          
-          PORT=${{ secrets.PORT }}
+          echo "📦 Docker image built and pushed to registry"
+          echo "Image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest"
+          echo "✅ Ready for deployment to your target server"
+          echo ""
+          echo "To deploy to your server, run:"
+          echo "1. docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest"
+          echo "2. docker compose -f docker-compose.prod.yml up -d"
 
-          DB_PORT=5432
-          DB_HOST=db
-          DB_NAME=${{ secrets.DB_NAME }}
-          DB_PASS=${{ secrets.DB_PASS }}
-          DB_USER=${{ secrets.DB_USER }}
-          
-          OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
-          GOOGLE_API_KEY=${{ secrets.GOOGLE_API_KEY }}
-          EOF
-          
-          # Stop existing containers
-          docker-compose -f docker-compose.prod.yml --env-file .env.prod down || true
-          
-          # Pull latest image
-          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
-          
-          # Update docker-compose to use the new image
-          sed -i "s|build:|image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest|g" docker-compose.prod.yml
-          sed -i "/dockerfile: Dockerfile/d" docker-compose.prod.yml
-          
-          # Start services
-          docker-compose -f docker-compose.prod.yml --env-file .env.prod up -d
-          
-          echo "✅ Deployment completed successfully"
+      - name: Deploy to SSH Server
+        if: github.event.inputs.deployment_target == 'ssh-server'
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: ${{ secrets.SSH_PORT || 22 }}
+          script: |
+            echo "🚀 Starting deployment to SSH server"
+            
+            # Create deployment directory
+            mkdir -p ~/deployments/job-crawler-be
+            cd ~/deployments/job-crawler-be
+            
+            # Download docker-compose files
+            curl -o docker-compose.prod.yml https://raw.githubusercontent.com/${{ github.repository }}/main/docker-compose.prod.yml
+            
+            # Create production environment file
+            cat > .env.prod << EOF
+            SECRET_KEY=${{ secrets.SECRET_KEY }}
+            DEBUG=False
+            ALLOWED_HOSTS=${{ secrets.ALLOWED_HOSTS }}
+            
+            PORT=${{ secrets.PORT }}
 
-      - name: Health check
-        if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
+            DB_PORT=5432
+            DB_HOST=db
+            DB_NAME=${{ secrets.DB_NAME }}
+            DB_PASS=${{ secrets.DB_PASS }}
+            DB_USER=${{ secrets.DB_USER }}
+            
+            OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
+            GOOGLE_API_KEY=${{ secrets.GOOGLE_API_KEY }}
+            EOF
+            
+            # Login to container registry
+            echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+            
+            # Stop existing containers
+            docker compose -f docker-compose.prod.yml --env-file .env.prod down || true
+            
+            # Pull latest image
+            docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+            
+            # Update docker-compose to use the new image
+            sed -i "s|build:|image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest|g" docker-compose.prod.yml
+            sed -i "/dockerfile: Dockerfile/d" docker-compose.prod.yml
+            
+            # Start services
+            docker compose -f docker-compose.prod.yml --env-file .env.prod up -d
+            
+            echo "✅ Deployment completed successfully"
+
+      - name: Health check (SSH Server)
+        if: github.event.inputs.deployment_target == 'ssh-server'
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: ${{ secrets.SSH_PORT || 22 }}
+          script: |
+            echo "🔍 Performing health check..."
+            
+            # Wait for services to start
+            sleep 30
+            
+            # Check if the application is responding
+            for i in {1..10}; do
+              if curl -f http://localhost:${{ secrets.PORT || 8000 }}/health/ || curl -f http://localhost:${{ secrets.PORT || 8000 }}/; then
+                echo "✅ Health check passed"
+                exit 0
+              fi
+              echo "⏳ Waiting for application to start... (attempt $i/10)"
+              sleep 10
+            done
+            
+            echo "❌ Health check failed"
+            exit 1
+
+      - name: Health check (Other targets)
+        if: github.event.inputs.deployment_target != 'ssh-server' && github.event.inputs.deployment_target != null
         run: |
-          echo "🔍 Performing health check..."
-          
-          # Wait for services to start
-          sleep 30
-          
-          # Check if the application is responding
-          for i in {1..10}; do
-            if curl -f http://localhost:8000/health/ || curl -f http://localhost:8000/; then
-              echo "✅ Health check passed"
-              exit 0
-            fi
-            echo "⏳ Waiting for application to start... (attempt $i/10)"
-            sleep 10
-          done
-          
-          echo "❌ Health check failed"
-          exit 1
+          echo "🔍 Health check skipped for ${{ github.event.inputs.deployment_target }}"
+          echo "Please check your deployment manually:"
+          echo "- Docker Registry: Pull and run the image on your server"
 
       - name: Cleanup old images
         if: always()
