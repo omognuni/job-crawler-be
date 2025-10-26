@@ -14,14 +14,7 @@ on:
         options:
           - docker-registry
           - ssh-server
-      environment:
-        description: 'Deployment environment'
-        required: true
-        default: 'production'
-        type: choice
-        options:
-          - production
-          - staging
+      environment: deploy
       force_deploy:
         description: 'Force deployment even if no changes'
         required: false
