@@ -158,7 +158,7 @@ class JobHunterCrew():
                       "지원자의 이력서를 면밀히 분석하여 핵심 역량과 경험을 추출하는 전문가입니다.",
             tools=[self.get_resume_tool, self.analyze_resume_tool],
             llm=LLM(
-                model="gemini/gemini-2.0-flash",
+                model="gemini/gemini-2.5-flash",
                 api_key=os.getenv("GOOGLE_API_KEY")
             ),
             verbose=True,
@@ -183,12 +183,16 @@ class JobHunterCrew():
     def job_hunter(self) -> Agent:
         return Agent(
             role="Job Hunter",
-            goal="**필터링된 공고 목록**과 이력서를 매칭하여 가장 적합한 Top 10 공고를 추천합니다.",
+            goal="""
+            **필터링된 공고 목록**과 이력서를 정밀하게 매칭하여, 
+            가장 적합한 Top 10 공고 목록(list)을 생성합니다.
+            그런 다음, 이 목록을 'Save recommendations tool'을 사용해 **DB에 저장**합니다.
+            """,
             backstory="당신은 경력 컨설턴트로서 수천 건의 성공적인 매칭 경험을 가진 전문가입니다. "
                       "지원자의 강점과 공고의 요구사항을 비교 분석하여 최적의 매칭을 찾아냅니다.",
             tools=[self.save_recommendations_tool],
             llm=LLM(
-                model="gemini/gemini-2.0-flash",
+                model="gemini/gemini-2.5-pro",
                 api_key=os.getenv("GOOGLE_API_KEY")
             ),
             verbose=True,
@@ -240,7 +244,7 @@ class JobHunterCrew():
     @task
     def fetch_job_postings_task(self) -> Task:
         return Task(
-            description=f"""
+            description="""
             [두 번째 단계]
             이전 단계(analyze_resume_task)의 이력서 분석 결과를 사용하여, 
             DB에서 관련 있는 채용 공고만 '사전 필터링'합니다.

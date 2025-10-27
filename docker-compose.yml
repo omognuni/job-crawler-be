@@ -14,7 +14,7 @@ services:
     volumes:
       - ./app:/workspace/app
       - /workspace/.venv
-    command: ["uv", "run", "python", "manage.py", "runserver", "0.0.0.0:8000"]
+    command: sh -c "uv run python manage.py migrate && uv run gunicorn app.config.wsgi:application --bind 0.0.0.0:8000"
     
   db:
     image: postgres:15
