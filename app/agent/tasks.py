@@ -229,6 +229,8 @@ class JobHunterCrew:
             "지원자의 강점과 공고의 요구사항을 비교 분석하여 최적의 매칭을 찾아냅니다.",
             tools=[self.save_recommendations_tool],
             llm=LLM(model="gemini/gemini-2.5-pro", api_key=os.getenv("GOOGLE_API_KEY")),
+            max_retry_limit=3,
+            max_rpm=2,
             verbose=True,
         )
 
