@@ -117,6 +117,7 @@ jobs:
             OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
             GOOGLE_API_KEY=${{ secrets.GOOGLE_API_KEY }}
             PROD_IMAGE_NAME=${PROD_IMAGE}
+            SLACK_WEBHOOK_URL=${{ secrets.SLACK_WEBHOOK_URL }}
             EOF
             
             # 6. Login to container registry

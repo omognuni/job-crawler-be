@@ -32,7 +32,7 @@ ALLOWED_HOSTS = (
     else ["localhost", "127.0.0.1", "0.0.0.0"]
 )
 
-
+SLACK_WEBHOOK_URL = os.getenv("SLACK_WEBHOOK_URL")
 # Application definition
 
 INSTALLED_APPS = [
