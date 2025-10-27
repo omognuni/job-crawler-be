@@ -25,7 +25,9 @@ def main():
             ✨ Job Hunter 추천 완료 ✨
 
             DB 저장 결과가 도착했습니다:
-            ```{result}```
+            ```
+            {result}
+            ```
             """
 
             payload = {"text": message_text}
