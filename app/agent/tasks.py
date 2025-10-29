@@ -98,7 +98,10 @@ class JobTasks:
             
             5. 'Save recommendations tool' 도구를 사용하여 user_id={user_id}에 대한 추천 결과 저장
             
-            출력: Top 10 추천 공고 목록 (JSON 형식)
+            6. **[ ❗ 매우 중요 ]** 'Save recommendations tool'이 반환한 JSON 데이터를 
+            **당신의 최종 답변(Final Answer)으로 그대로 반환해야 합니다.**
+              
+            출력: 'Save recommendations tool'이 반환한 JSON 데이터를 그대로 반환합니다.
             """,
             expected_output="""
             Top 10 추천 공고 목록을 포함한 JSON 배열. 

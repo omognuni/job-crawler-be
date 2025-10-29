@@ -27,6 +27,7 @@ class JobAgents:
             "지원자의 이력서를 면밀히 분석하여 핵심 역량과 경험을 추출하는 전문가입니다.",
             tools=[get_resume_tool, analyze_resume_tool],
             llm=gemini_pro_llm,
+            max_rpm=1,
             verbose=True,
         )
 
@@ -58,6 +59,6 @@ class JobAgents:
             tools=[save_recommendations_tool],
             llm=gemini_pro_llm,
             max_retry_limit=3,
-            max_rpm=2,
+            max_rpm=1,
             verbose=True,
         )
