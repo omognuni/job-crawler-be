@@ -100,8 +100,6 @@ class JobTasks:
             
             6. **[ ❗ 매우 중요 ]** 'Save recommendations tool'이 반환한 JSON 데이터를 
             **당신의 최종 답변(Final Answer)으로 그대로 반환해야 합니다.**
-              
-            출력: 'Save recommendations tool'이 반환한 JSON 데이터를 그대로 반환합니다.
             """,
             expected_output="""
             Top 10 추천 공고 목록을 포함한 JSON 배열. 
