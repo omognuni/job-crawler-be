@@ -45,8 +45,8 @@ def main():
                     headers={"Content-Type": "application/json"},
                     timeout=10,
                 )
-            except (json.JSONDecodeError, AttributeError):
-                payload = {"text": f"오류가 발생했습니다: {data}"}
+            except (json.JSONDecodeError, AttributeError) as e:
+                payload = {"text": f"오류가 발생했습니다: {e}"}
                 response = requests.post(
                     settings.SLACK_WEBHOOK_URL,
                     data=json.dumps(payload),
