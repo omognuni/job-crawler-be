@@ -1,5 +1,6 @@
 from crewai import Task
 from agent.agents import JobAgents
+from agent.schemas import FinalRecommendationOutput
 
 agents = JobAgents()
 
@@ -127,5 +128,5 @@ class JobTasks:
                 self.analyze_resume_task(user_id),
                 self.fetch_job_postings_task(),
             ],
-            output_json=True,
+            output_json=FinalRecommendationOutput,
         )
