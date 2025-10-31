@@ -127,4 +127,5 @@ class JobTasks:
                 self.analyze_resume_task(user_id),
                 self.fetch_job_postings_task(),
             ],
+            output_json=True,
         )
