@@ -1,13 +1,10 @@
-from rest_framework.viewsets import GenericViewSet, ModelViewSet
-from rest_framework.request import Request
-from rest_framework.response import Response
-from rest_framework import status
-from agent.models import JobPosting, Resume, JobRecommendation
-from agent.serializers import (
+from job.models import JobPosting, JobRecommendation, Resume
+from job.serializers import (
     JobPostingSerializer,
-    ResumeSerializer,
     JobRecommendationSerializer,
+    ResumeSerializer,
 )
+from rest_framework.viewsets import ModelViewSet
 
 
 class JobPostingViewSet(ModelViewSet):

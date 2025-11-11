@@ -1,5 +1,5 @@
 from django.contrib import admin
-from agent.models import JobPosting, Resume, JobRecommendation
+from job.models import JobPosting, JobRecommendation, Resume
 
 
 @admin.register(JobPosting)

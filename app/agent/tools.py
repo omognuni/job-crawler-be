@@ -6,14 +6,15 @@ from typing import Annotated
 from crewai.tools import tool
 from django.db.models import Q
 from django.utils import timezone
-
-from agent.models import JobPosting, JobRecommendation, Resume
+from job.models import JobPosting, JobRecommendation, Resume
 
 
 @tool("Fetch Filtered Job Postings Tool")
 def fetch_filtered_job_postings_tool(
     career_years: Annotated[int, "필터링할 경력 연수 (예: 3)"],
-    skills: Annotated[list[str], "필터링할 기술 스택 리스트 (예: ['Python', 'Django'])"],
+    skills: Annotated[
+        list[str], "필터링할 기술 스택 리스트 (예: ['Python', 'Django'])"
+    ],
 ) -> str:
     """
     이력서 분석 결과를 바탕으로 데이터베이스에서 채용 공고를 사전 필터링합니다.
