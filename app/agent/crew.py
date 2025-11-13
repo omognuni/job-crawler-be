@@ -1,6 +1,6 @@
-from crewai import Crew, CrewOutput
 from agent.agents import JobAgents
 from agent.tasks import JobTasks
+from crewai import Crew, CrewOutput
 
 
 class JobHunterCrew:
@@ -33,4 +33,7 @@ class JobHunterCrew:
 
         # 크루 실행
         result = crew.kickoff()
+        print("--- Agent's Raw Output ---")
+        print(result.raw)
+        print("--------------------------")
         return result

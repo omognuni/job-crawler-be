@@ -21,14 +21,10 @@ def main():
         resume_objs = Resume.objects.all()
         for resume_obj in resume_objs:
             crew = JobHunterCrew(user_id=resume_obj.user_id)
-            result: CrewOutput = crew.run()
+            result = crew.run()
 
             try:
-                if result.json_dict:
-                    data = result.json_dict
-                else:
-                    data = json.loads(result.raw)
-
+                data = result.json_dict
                 recommendations = data.get("recommendations", [])
 
                 message_lines = [

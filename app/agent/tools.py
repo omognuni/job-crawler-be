@@ -155,6 +155,7 @@ def save_recommendations_tool(
                     "company_name": job_posting.company_name,
                     "position": job_posting.position,
                     "match_score": recommendation.match_score,
+                    "match_reason": recommendation.match_reason,
                 }
             )
         except JobPosting.DoesNotExist:
