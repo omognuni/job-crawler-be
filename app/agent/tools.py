@@ -3,63 +3,68 @@ import operator
 from functools import reduce
 from typing import Annotated
 
+from common.vector_db import vector_db_client
 from crewai.tools import tool
-from django.db.models import Q
+from django.db.models import Case, Q, When
 from django.utils import timezone
 from job.models import JobPosting, JobRecommendation, Resume
 
 
-@tool("Fetch Filtered Job Postings Tool")
-def fetch_filtered_job_postings_tool(
-    career_years: Annotated[int, "필터링할 경력 연수 (예: 3)"],
-    skills: Annotated[
-        list[str], "필터링할 기술 스택 리스트 (예: ['Python', 'Django'])"
-    ],
+@tool("Vector Search Job Postings Tool")
+def vector_search_job_postings_tool(
+    query_text: Annotated[str, "유사도 검색을 위한 쿼리 텍스트 (이력서 요약 등)"],
+    n_results: Annotated[int, "가져올 결과의 수"] = 100,
 ) -> str:
     """
-    이력서 분석 결과를 바탕으로 데이터베이스에서 채용 공고를 사전 필터링합니다.
+    주어진 쿼리 텍스트와 의미적으로 유사한 채용 공고를 벡터 DB에서 검색합니다.
     """
     print(
-        f"[Tool Call] fetch_filtered_job_postings_tool 호출됨. 경력: {career_years}, 스킬: {skills}"
+        f"[Tool Call] vector_search_job_postings_tool 호출됨. Query: {query_text[:50]}..."
     )
 
-    query_set = JobPosting.objects.all()
+    # 1. Vector DB에서 유사 공고 ID 검색
+    collection = vector_db_client.get_or_create_collection("job_postings")
+    query_result = vector_db_client.query(
+        collection=collection,
+        query_texts=[query_text],
+        n_results=n_results,
+    )
 
-    if career_years is not None:
-        if career_years == 0:
-            query_set = query_set.filter(career_min=0)
-        else:
-            query_set = query_set.filter(
-                Q(career_min__lte=career_years)
-                & (Q(career_max__gte=career_years) | Q(career_max=0))
-            )
+    posting_ids = query_result["ids"][0]
+    if not posting_ids:
+        return json.dumps([], ensure_ascii=False)
 
-    if skills:
-        skill_queries = [
-            Q(requirements__icontains=skill) | Q(preferred_points__icontains=skill)
-            for skill in skills
-        ]
-        if skill_queries:
-            combined_skill_query = reduce(operator.or_, skill_queries)
-            query_set = query_set.filter(combined_skill_query)
+    # 2. ID를 사용하여 Postgres DB에서 전체 공고 정보 조회
+    # ChromaDB는 ID를 문자열로 저장하므로 정수형으로 변환 필요
+    int_posting_ids = [int(pid) for pid in posting_ids]
 
-    filtered_postings = query_set.distinct().values(
-        "posting_id",
-        "url",
-        "company_name",
-        "position",
-        "main_tasks",
-        "requirements",
-        "preferred_points",
-        "location",
-        "district",
-        "employment_type",
-        "career_min",
-        "career_max",
-    )[:100]
+    # 순서를 보장하면서 조회
+    preserved_order = Case(
+        *[When(posting_id=pk, then=pos) for pos, pk in enumerate(int_posting_ids)]
+    )
+    query_set = JobPosting.objects.filter(posting_id__in=int_posting_ids).order_by(
+        preserved_order
+    )
 
-    print(f"[Tool Call] {len(filtered_postings)} 건의 공고가 필터링되었습니다.")
-    return json.dumps(list(filtered_postings), ensure_ascii=False, default=str)
+    filtered_postings = list(
+        query_set.values(
+            "posting_id",
+            "url",
+            "company_name",
+            "position",
+            "main_tasks",
+            "requirements",
+            "preferred_points",
+            "location",
+            "district",
+            "employment_type",
+            "career_min",
+            "career_max",
+        )
+    )
+
+    print(f"[Tool Call] {len(filtered_postings)} 건의 공고가 벡터 검색되었습니다.")
+    return json.dumps(filtered_postings, ensure_ascii=False, default=str)
 
 
 @tool("Get resume tool")

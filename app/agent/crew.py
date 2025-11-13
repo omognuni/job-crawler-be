@@ -1,3 +1,5 @@
+import os
+
 from agent.agents import JobAgents
 from agent.tasks import JobTasks
 from crewai import Crew, CrewOutput
@@ -8,6 +10,11 @@ class JobHunterCrew:
         self.user_id = user_id
         self.agents = JobAgents()
         self.tasks = JobTasks()
+        self._validate_api_keys()
+
+    def _validate_api_keys(self):
+        if not os.getenv("GOOGLE_API_KEY"):
+            raise ValueError("GOOGLE_API_KEY가 설정되지 않았습니다.")
 
     def run(self) -> CrewOutput:
         # 에이전트 생성

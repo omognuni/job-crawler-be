@@ -51,23 +51,24 @@ class JobTasks:
             description="""
             [두 번째 단계]
             이전 단계(analyze_resume_task)의 이력서 분석 결과를 사용하여,
-            DB에서 관련 있는 채용 공고만 '사전 필터링'합니다.
+            의미적으로 가장 유사한 채용 공고를 '벡터 검색'합니다.
 
             단계:
             1. context에서 이전 태스크(analyze_resume_task)의 출력을 받습니다.
-            2. 출력 JSON에서 'analysis_result.career_years'와 'analysis_result.skills'를 추출합니다.
-            3. 'Fetch Filtered Job Postings Tool' 도구를 호출하여 필터링된 공고 목록을 가져옵니다.
-                - career_years 파라미터: 추출한 경력 연수
-                - skills 파라미터: 추출한 스킬 리스트
+            2. 출력 JSON의 'analysis_result'에서 'strengths'와 'skills'를 조합하여 검색 쿼리 생성.
+               - 예: "비동기 처리 및 대용량 트래픽 경험. 보유 기술: Python, Django, FastAPI"
+            3. 'Vector Search Job Postings Tool' 도구를 호출하여 의미적으로 유사한 공고 목록을 가져옵니다.
+                - query_text 파라미터: 생성한 검색 쿼리
+                - n_results 파라미터: 100
 
             **[ ❗ 매우 중요 - 에이전트 지시사항 ]**
-            - 당신('Job Posting Inspector')의 유일한 임무는 'Fetch Filtered Job Postings Tool'을 **단 한 번** 호출하는 것입니다.
-            - **절대로** 'Save recommendations tool' 또는 'Analyze resume tool' 등 다른 도구를 호출하지 마십시오.
-            - 이 Task는 오직 공고를 '가져오는(Fetch)' 단계입니다. '저장(Save)'은 다음 에이전트의 역할입니다.
+            - 당신('Job Posting Inspector')의 유일한 임무는 'Vector Search Job Postings Tool'을 **단 한 번** 호출하는 것입니다.
+            - **절대로** 다른 도구를 호출하지 마십시오.
+            - 이 Task는 오직 공고를 '검색(Search)'하는 단계입니다. '저장(Save)'은 다음 에이전트의 역할입니다.
 
-            출력: 사전 필터링된 상위 100개의 채용 공고 리스트 (JSON 형식). 툴이 반환한 결과를 그대로 출력해야 합니다.
+            출력: 벡터 검색된 상위 100개의 채용 공고 리스트 (JSON 형식). 툴이 반환한 결과를 그대로 출력해야 합니다.
             """,
-            expected_output="사전 필터링된 최대 100개의 채용 공고 목록을 포함한 JSON 배열.",
+            expected_output="벡터 검색으로 찾은 최대 100개의 채용 공고 목록을 포함한 JSON 배열.",
             agent=agents.job_posting_inspector(),
             context=[self.analyze_resume_task(0)],  # user_id is not used here
         )
