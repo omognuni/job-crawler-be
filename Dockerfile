@@ -18,4 +18,3 @@ COPY ./app /workspace/app
 WORKDIR /workspace/app
 
 ENV PYTHONPATH="/workspace"
-RUN uv run python manage.py collectstatic --noinput --clear
