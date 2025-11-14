@@ -8,6 +8,7 @@ from crewai.tools import tool
 from django.db.models import Case, Q, When
 from django.utils import timezone
 from job.models import JobPosting, JobRecommendation, Resume
+from job.signals import SKILL_LIST, _extract_resume_details
 
 
 @tool("Vector Search Job Postings Tool")
@@ -18,9 +19,9 @@ def vector_search_job_postings_tool(
     """
     주어진 쿼리 텍스트와 의미적으로 유사한 채용 공고를 벡터 DB에서 검색합니다.
     """
-    print(
-        f"[Tool Call] vector_search_job_postings_tool 호출됨. Query: {query_text[:50]}..."
-    )
+    # print(
+    #     f"[Tool Call] vector_search_job_postings_tool 호출됨. Query: {query_text[:50]}..."
+    # )
 
     # 1. Vector DB에서 유사 공고 ID 검색
     collection = vector_db_client.get_or_create_collection("job_postings")
@@ -60,10 +61,12 @@ def vector_search_job_postings_tool(
             "employment_type",
             "career_min",
             "career_max",
+            "skills_required",
+            "skills_preferred",
         )
     )
 
-    print(f"[Tool Call] {len(filtered_postings)} 건의 공고가 벡터 검색되었습니다.")
+    # print(f"[Tool Call] {len(filtered_postings)} 건의 공고가 벡터 검색되었습니다.")
     return json.dumps(filtered_postings, ensure_ascii=False, default=str)
 
 
@@ -73,14 +76,22 @@ def get_resume_tool(user_id: Annotated[int, "조회할 사용자의 ID"]) -> str
     try:
         resume = Resume.objects.get(user_id=user_id)
         if resume.needs_analysis():
+            # LLM 대신 직접 분석 로직 호출
+            analysis_result = _extract_resume_details(resume.content, SKILL_LIST)
+            resume.analysis_result = analysis_result
+            resume.analyzed_at = timezone.now()
+            resume.save()  # Save the updated analysis result
+
             return json.dumps(
                 {
-                    "status": "needs_analysis",
+                    "status": "analyzed",  # 상태를 'analyzed'로 변경
                     "user_id": resume.user_id,
                     "content": resume.content,
-                    "message": "이력서 분석이 필요합니다. analyze_resume_tool을 사용하세요.",
+                    "analysis_result": resume.analysis_result,
+                    "analyzed_at": str(resume.analyzed_at),
                 },
                 ensure_ascii=False,
+                default=str,
             )
         else:
             return json.dumps(

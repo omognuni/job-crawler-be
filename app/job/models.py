@@ -16,6 +16,12 @@ class JobPosting(models.Model):
     employment_type = models.CharField(max_length=255)
     career_min = models.IntegerField()
     career_max = models.IntegerField()
+    skills_required = models.JSONField(
+        null=True, blank=True, help_text="요구 기술 스택 (JSON 배열)"
+    )
+    skills_preferred = models.JSONField(
+        null=True, blank=True, help_text="우대 기술 스택 (JSON 배열)"
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

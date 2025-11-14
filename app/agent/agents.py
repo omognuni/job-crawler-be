@@ -20,7 +20,8 @@ class JobAgents:
     def resume_inspector(self) -> Agent:
         return Agent(
             role="Resume Inspector",
-            goal="이력서를 상세히 분석하여 지원자의 기술 스택, 경력 연차, 강점을 JSON 형식으로 추출합니다.",
+            goal="이력서를 상세히 분석하여 지원자의 기술 스택, 경력 연차, 강점을 JSON 형식으로 추출합니다. "
+            "이 과정은 'Get resume tool' 내부에서 `_extract_resume_details` 함수를 통해 자동화되어 LLM의 직접적인 개입을 최소화합니다.",
             backstory="당신은 10년 경력의 HR 전문가이자 기술 채용 컨설턴트입니다. "
             "지원자의 이력서를 면밀히 분석하여 핵심 역량과 경험을 추출하는 전문가입니다.",
             tools=[get_resume_tool, analyze_resume_tool],
@@ -34,8 +35,9 @@ class JobAgents:
             role="Job Posting Inspector",
             goal="""
                 이력서 분석 결과(JSON)를 바탕으로 필터링된 채용 공고 목록을 가져옵니다.
-                그런 다음, 각 공고의 **전체 텍스트가 아닌 핵심 요구사항(자격요건, 우대사항)만 추출**하여
-                다음 Agent가 비교하기 쉽도록 구조화합니다.
+                각 공고에는 이미 `skills_required` (필수 기술 스택)와 `skills_preferred` (우대 기술 스택) 필드가
+                구조화된 JSON 배열 형태로 포함되어 있습니다.
+                이 구조화된 스킬 정보를 활용하여 다음 Agent가 비교하기 쉽도록 준비합니다.
                 """,
             backstory="당신은 채용 공고 분석 전문가입니다. "
             "공고에서 핵심 요구사항, 우대사항, 회사 문화를 정확히 파악하여 구조화합니다.",

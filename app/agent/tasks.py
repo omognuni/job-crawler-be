@@ -16,15 +16,10 @@ class JobTasks:
             1. 'Get resume tool' 도구를 사용하여 user_id={user_id}의 이력서 조회
             2. 반환된 status 확인:
                - 'cached': 이미 분석된 결과가 있음 → analysis_result 사용
-               - 'needs_analysis': 재분석 필요 → 3단계 진행
-
-            3. 재분석이 필요한 경우 (status='needs_analysis'):
-               a. 'content'를 면밀히 분석하여 다음 정보 추출 (필수!):
-                  - skills: 핵심 기술 스택 (리스트, 예: ["Python", "Django", "C++"])
-                  - career_years: 총 경력 연수 (숫자, 예: 3). 신입은 0.
-                  - experiences: 주요 경험 및 프로젝트
-                  - strengths: 핵심 강점
-               b. 'Analyze resume tool' 도구를 사용하여 이 JSON 분석 결과를 저장
+               - 'analyzed': 방금 분석이 완료됨 → analysis_result 사용
+               - 'needs_analysis': 이력서 내용이 변경되어 재분석이 필요했으나, 'Get resume tool' 내부에서
+                                   `_extract_resume_details` 함수를 통해 자동으로 분석이 완료되었음.
+                                   따라서 항상 `analysis_result` 필드를 사용할 수 있습니다.
 
             출력: 다음 태스크(공고 필터링)에서 사용할 이력서 분석 결과 (JSON 형식)
             """,
@@ -67,8 +62,13 @@ class JobTasks:
             - 이 Task는 오직 공고를 '검색(Search)'하는 단계입니다. '저장(Save)'은 다음 에이전트의 역할입니다.
 
             출력: 벡터 검색된 상위 100개의 채용 공고 리스트 (JSON 형식). 툴이 반환한 결과를 그대로 출력해야 합니다.
+            각 공고에는 `skills_required` (필수 기술 스택)와 `skills_preferred` (우대 기술 스택) 필드가 포함됩니다.
             """,
-            expected_output="벡터 검색으로 찾은 최대 100개의 채용 공고 목록을 포함한 JSON 배열.",
+            expected_output="""
+            벡터 검색으로 찾은 최대 100개의 채용 공고 목록을 포함한 JSON 배열.
+            각 공고 객체는 `posting_id`, `company_name`, `position`, `requirements`, `preferred_points`,
+            `skills_required` (JSON 배열), `skills_preferred` (JSON 배열) 등의 필드를 포함합니다.
+            """,
             agent=agents.job_posting_inspector(),
             context=[self.analyze_resume_task(0)],  # user_id is not used here
         )
