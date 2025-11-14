@@ -4,6 +4,14 @@ on:
   push:
     branches:
       - main
+    paths:
+      - 'app/**'
+      - 'Dockerfile'
+      - 'docker-compose.yml'
+      - 'docker-compose.prod.yml'
+      - 'pyproject.toml'
+      - 'uv.lock'
+      - '.github/workflows/deploy.yml'
   workflow_dispatch:
     inputs:
       deployment_target:
@@ -63,8 +71,19 @@ jobs:
           cache-to: type=gha,mode=max
           platforms: linux/amd64,linux/arm64
 
+      - name: Copy compose file to server
+        if: github.event_name == 'push' || github.event.inputs.deployment_target == 'ssh-server'
+        uses: appleboy/scp-action@v0.1.4
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: ${{ secrets.SSH_PORT || 22 }}
+          source: "docker-compose.prod.yml"
+          target: "~/deployments/job-crawler-be"
+
       - name: Deploy to SSH Server
-        if: github.event.inputs.deployment_target == 'ssh-server'
+        if: github.event_name == 'push' || github.event.inputs.deployment_target == 'ssh-server'
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.SSH_HOST }}
@@ -72,38 +91,15 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: ${{ secrets.SSH_PORT || 22 }}
           script: |
-            set -e # 오류 발생 시 스크립트 중단
+            set -e # Stop on error
 
-            # 1. 경로 변수를 $HOME을 사용하여 절대 경로로 설정
             DEPLOY_DIR="$HOME/deployments/job-crawler-be"
-            REPO_DIR="$DEPLOY_DIR/repo"
-            KEY_PATH="$DEPLOY_DIR/deploy_key" # 키 파일의 절대 경로
             PROD_IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest"
 
             echo "🚀 Starting deployment to SSH server"
-            mkdir -p $DEPLOY_DIR
             cd $DEPLOY_DIR
-            
-            # 2. Setup Deploy Key (절대 경로 사용)
-            echo "${{ secrets.DEPLOY_KEY }}" > $KEY_PATH
-            chmod 600 $KEY_PATH
-            
-            # 3. GIT_SSH_COMMAND에 절대 경로($KEY_PATH) 사용
-            export GIT_SSH_COMMAND="ssh -i $KEY_PATH -o StrictHostKeyChecking=no"
-            
-            # 4. Clone or pull the repository
-            if [ -d "$REPO_DIR" ]; then
-              echo "🔄 Pulling latest code..."
-              cd $REPO_DIR
-              git reset --hard
-              git pull origin main # 이제 $KEY_PATH를 올바르게 찾음
-            else
-              echo "Cloning repository..."
-              git clone git@github.com:${{ github.repository }}.git $REPO_DIR
-              cd $REPO_DIR
-            fi
-            
-            # 5. Create production environment file
+
+            # 1. Create production environment file
             cat > .env.prod << EOF
             SECRET_KEY=${{ secrets.SECRET_KEY }}
             DEBUG=False
@@ -119,24 +115,23 @@ jobs:
             PROD_IMAGE_NAME=${PROD_IMAGE}
             SLACK_WEBHOOK_URL=${{ secrets.SLACK_WEBHOOK_URL }}
             EOF
-            
-            # 6. Login to container registry
+
+            # 2. Login to container registry
             echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-            
-            # 7. Pull latest image
+
+            # 3. Pull latest image
             docker pull $PROD_IMAGE
-            
-            # 8. Stop, remove old containers, and start new ones
+
+            # 4. Stop, remove old containers, and start new ones
             docker compose -f docker-compose.prod.yml --env-file .env.prod down || true
             docker compose -f docker-compose.prod.yml --env-file .env.prod up -d
-            
-            # 9. Cleanup server (절대 경로 사용)
-            rm -f $KEY_PATH # Remove deploy key
+
+            # 5. Cleanup server
             docker system prune -af # Remove old images/containers
 
             echo "✅ Deployment completed successfully"
       - name: Health check (SSH Server)
-        if: github.event.inputs.deployment_target == 'ssh-server'
+        if: github.event_name == 'push' || github.event.inputs.deployment_target == 'ssh-server'
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.SSH_HOST }}
@@ -146,9 +141,9 @@ jobs:
           script: |
             echo "🔍 Performing health check..."
             sleep 20 # Wait for services to start
-            
+
             PORT_TO_CHECK=${{ secrets.PORT || 8000 }}
-            
+
             for i in {1..10}; do
               # /health 또는 / 엔드포인트 확인
               if curl -f "http://localhost:$PORT_TO_CHECK/health/" || curl -f "http://localhost:$PORT_TO_CHECK/"; then
@@ -158,7 +153,7 @@ jobs:
               echo "⏳ Waiting for application... (attempt $i/10)"
               sleep 10
             done
-            
+
             echo "❌ Health check failed"
             exit 1
 
