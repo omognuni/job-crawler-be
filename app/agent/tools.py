@@ -155,7 +155,14 @@ def save_recommendations_tool(
     saved_recommendations = []
     for rec in recommendations[:10]:
         try:
-            job_posting = JobPosting.objects.get(posting_id=rec["posting_id"])
+            job_posting = None
+            if "posting_id" in rec and rec["posting_id"]:
+                job_posting = JobPosting.objects.get(posting_id=rec["posting_id"])
+            elif "url" in rec and rec["url"]:
+                job_posting = JobPosting.objects.get(url=rec["url"])
+            else:
+                continue
+
             recommendation = JobRecommendation.objects.create(
                 user_id=user_id,
                 job_posting=job_posting,
