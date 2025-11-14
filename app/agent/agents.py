@@ -3,6 +3,7 @@ import os
 from agent.tools import (
     analyze_resume_tool,
     get_resume_tool,
+    hybrid_search_job_postings_tool,
     save_recommendations_tool,
     vector_search_job_postings_tool,
 )
@@ -26,7 +27,7 @@ class JobAgents:
             "지원자의 이력서를 면밀히 분석하여 핵심 역량과 경험을 추출하는 전문가입니다.",
             tools=[get_resume_tool, analyze_resume_tool],
             llm=gemini_pro_llm,
-            max_rpm=1,
+            max_retry_limit=3,
             verbose=True,
         )
 
@@ -35,30 +36,36 @@ class JobAgents:
             role="Job Posting Inspector",
             goal="""
                 이력서 분석 결과(JSON)를 바탕으로 필터링된 채용 공고 목록을 가져옵니다.
+                Vector DB와 Graph DB를 결합한 Hybrid 검색을 사용하여 정확도를 높입니다.
                 각 공고에는 이미 `skills_required` (필수 기술 스택)와 `skills_preferred` (우대 기술 스택) 필드가
                 구조화된 JSON 배열 형태로 포함되어 있습니다.
-                이 구조화된 스킬 정보를 활용하여 다음 Agent가 비교하기 쉽도록 준비합니다.
                 """,
             backstory="당신은 채용 공고 분석 전문가입니다. "
-            "공고에서 핵심 요구사항, 우대사항, 회사 문화를 정확히 파악하여 구조화합니다.",
-            tools=[vector_search_job_postings_tool],
+            "Vector DB와 Graph DB를 결합하여 의미적으로 유사하면서도 스킬 요구사항이 매칭되는 공고를 찾습니다.",
+            tools=[hybrid_search_job_postings_tool],
             llm=gemini_flash_llm,
+            max_retry_limit=3,
             verbose=True,
         )
 
     def job_hunter(self) -> Agent:
         return Agent(
-            role="Job Hunter",
+            role="Job Recommender",
             goal="""
-            **필터링된 공고 목록**과 이력서를 정밀하게 매칭하여,
-            가장 적합한 Top 10 공고 목록(list)을 생성합니다.
-            그런 다음, 이 목록을 'Save recommendations tool'을 사용해 **DB에 저장**합니다.
+            You are a data processor. Your sole purpose is to process two pieces of JSON data provided from the context:
+            1. A JSON object containing a user's resume analysis.
+            2. A JSON array of job postings.
+
+            Your goal is to:
+            1. Compare the resume analysis against EACH job posting in the provided list.
+            2. Calculate a `match_score` for each job posting.
+            3. Select the Top 10 job postings with the highest scores.
+            4. For these Top 10, create a new list of JSON objects. EACH object MUST include the original `posting_id` from the job posting, a new `rank`, the calculated `match_score`, and a `match_reason`.
+            5. Call the 'Save recommendations tool' with this new list.
             """,
-            backstory="당신은 경력 컨설턴트로서 수천 건의 성공적인 매칭 경험을 가진 전문가입니다. "
-            "지원자의 강점과 공고의 요구사항을 비교 분석하여 최적의 매칭을 찾아냅니다.",
+            backstory="You are an automated system for ranking and saving job recommendations. You follow instructions precisely. You do not invent or simulate data. You only process the data given to you from the context.",
             tools=[save_recommendations_tool],
             llm=gemini_pro_llm,
             max_retry_limit=3,
-            max_rpm=1,
             verbose=True,
         )

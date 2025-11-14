@@ -3,6 +3,7 @@ import operator
 from functools import reduce
 from typing import Annotated
 
+from common.graph_db import graph_db_client
 from common.vector_db import vector_db_client
 from crewai.tools import tool
 from django.db.models import Case, Q, When
@@ -14,10 +15,11 @@ from job.signals import SKILL_LIST, _extract_resume_details
 @tool("Vector Search Job Postings Tool")
 def vector_search_job_postings_tool(
     query_text: Annotated[str, "유사도 검색을 위한 쿼리 텍스트 (이력서 요약 등)"],
-    n_results: Annotated[int, "가져올 결과의 수"] = 100,
+    n_results: Annotated[int, "가져올 결과의 수"] = 20,
 ) -> str:
     """
     주어진 쿼리 텍스트와 의미적으로 유사한 채용 공고를 벡터 DB에서 검색합니다.
+    토큰 효율을 위해 상위 20개만 반환합니다.
     """
     # print(
     #     f"[Tool Call] vector_search_job_postings_tool 호출됨. Query: {query_text[:50]}..."
@@ -67,6 +69,101 @@ def vector_search_job_postings_tool(
     )
 
     # print(f"[Tool Call] {len(filtered_postings)} 건의 공고가 벡터 검색되었습니다.")
+    return json.dumps(filtered_postings, ensure_ascii=False, default=str)
+
+
+@tool("Hybrid Search Job Postings Tool")
+def hybrid_search_job_postings_tool(
+    query_text: Annotated[str, "유사도 검색을 위한 쿼리 텍스트 (이력서 요약 등)"],
+    user_skills: Annotated[list[str], "사용자가 보유한 기술 스택 리스트"],
+    n_results: Annotated[int, "최종 반환할 결과의 수"] = 20,
+) -> str:
+    """
+    Vector DB와 Graph DB를 결합한 2단계 검색으로 정확도를 높입니다.
+    1단계: Vector DB에서 의미 기반 검색 (50개)
+    2단계: Graph DB에서 스킬 기반 필터링 (20개)
+    """
+    # 1단계: Vector DB에서 더 많은 후보 검색 (50개)
+    initial_candidates = 50
+    collection = vector_db_client.get_or_create_collection("job_postings")
+    query_result = vector_db_client.query(
+        collection=collection,
+        query_texts=[query_text],
+        n_results=initial_candidates,
+    )
+
+    posting_ids = query_result["ids"][0]
+    if not posting_ids:
+        print("[Hybrid Search] Vector DB에서 결과를 찾지 못했습니다.")
+        return json.dumps([], ensure_ascii=False)
+
+    int_posting_ids = [int(pid) for pid in posting_ids]
+    print(
+        f"[Hybrid Search] 1단계: Vector DB에서 {len(int_posting_ids)}개 후보 검색 완료"
+    )
+
+    # 2단계: Graph DB에서 스킬 기반 필터링
+    if user_skills:
+        print(
+            f"[Hybrid Search] 2단계: Graph DB 필터링 시작 (스킬: {user_skills[:5]}...)"
+        )
+        filtered_results = graph_db_client.filter_postings_by_skills(
+            posting_ids=int_posting_ids,
+            user_skills=user_skills,
+            limit=n_results,
+        )
+
+        # 필터링 결과가 있으면 해당 순서 사용, 없으면 Vector 검색 순서 유지
+        if filtered_results:
+            int_posting_ids = [result["posting_id"] for result in filtered_results]
+            print(
+                f"[Hybrid Search] Graph DB 필터링 완료: {len(int_posting_ids)}개 매칭"
+            )
+        else:
+            # 스킬 매칭이 없으면 상위 n_results개만 사용
+            int_posting_ids = int_posting_ids[:n_results]
+            print(
+                f"[Hybrid Search] Graph DB 매칭 없음 → Vector 상위 {len(int_posting_ids)}개 사용 (Fallback)"
+            )
+    else:
+        # 스킬 정보가 없으면 Vector 검색 상위 n_results개만
+        int_posting_ids = int_posting_ids[:n_results]
+        print(
+            f"[Hybrid Search] 스킬 정보 없음 → Vector 상위 {len(int_posting_ids)}개 사용"
+        )
+
+    # 3단계: PostgreSQL에서 전체 공고 정보 조회
+    preserved_order = Case(
+        *[When(posting_id=pk, then=pos) for pos, pk in enumerate(int_posting_ids)]
+    )
+    query_set = JobPosting.objects.filter(posting_id__in=int_posting_ids).order_by(
+        preserved_order
+    )
+
+    filtered_postings = list(
+        query_set.values(
+            "posting_id",
+            "url",
+            "company_name",
+            "position",
+            "main_tasks",
+            "requirements",
+            "preferred_points",
+            "location",
+            "district",
+            "employment_type",
+            "career_min",
+            "career_max",
+            "skills_required",
+            "skills_preferred",
+        )
+    )
+
+    print(
+        f"[Hybrid Search] 3단계: PostgreSQL에서 {len(filtered_postings)}개 공고 조회 완료"
+    )
+    print(f"[Hybrid Search] 최종 반환: {len(filtered_postings)}개")
+
     return json.dumps(filtered_postings, ensure_ascii=False, default=str)
 
 

@@ -44,28 +44,37 @@ class JobTasks:
     def fetch_job_postings_task(self) -> Task:
         return Task(
             description="""
-            [두 번째 단계]
+            [두 번째 단계] - Hybrid 검색 (Vector DB + Graph DB)
             이전 단계(analyze_resume_task)의 이력서 분석 결과를 사용하여,
-            의미적으로 가장 유사한 채용 공고를 '벡터 검색'합니다.
+            의미적으로 유사하면서도 스킬이 매칭되는 채용 공고를 찾습니다.
 
             단계:
             1. context에서 이전 태스크(analyze_resume_task)의 출력을 받습니다.
-            2. 출력 JSON의 'analysis_result'에서 'strengths'와 'skills'를 조합하여 검색 쿼리 생성.
-               - 예: "비동기 처리 및 대용량 트래픽 경험. 보유 기술: Python, Django, FastAPI"
-            3. 'Vector Search Job Postings Tool' 도구를 호출하여 의미적으로 유사한 공고 목록을 가져옵니다.
-                - query_text 파라미터: 생성한 검색 쿼리
-                - n_results 파라미터: 100
+            2. 출력 JSON의 'analysis_result'에서 다음 정보를 추출:
+               - 'skills': 사용자가 보유한 기술 스택 리스트
+               - 'strengths': 사용자의 강점 설명
+            3. 'Hybrid Search Job Postings Tool' 도구를 호출:
+                - query_text 파라미터: strengths와 skills를 조합한 검색 쿼리
+                  예: "비동기 처리 및 대용량 트래픽 경험. 보유 기술: Python, Django, FastAPI"
+                - user_skills 파라미터: skills 리스트 (예: ["Python", "Django", "FastAPI"])
+                - n_results 파라미터: 20
+
+            ** Hybrid 검색 프로세스 **
+            - 1단계 (Vector DB): 의미 기반 검색으로 50개 후보 찾기
+            - 2단계 (Graph DB): 스킬 매칭으로 20개로 정제
+            - 결과: 의미적으로 유사 + 스킬 매칭 = 높은 정확도
 
             **[ ❗ 매우 중요 - 에이전트 지시사항 ]**
-            - 당신('Job Posting Inspector')의 유일한 임무는 'Vector Search Job Postings Tool'을 **단 한 번** 호출하는 것입니다.
+            - 당신('Job Posting Inspector')의 유일한 임무는 'Hybrid Search Job Postings Tool'을 **단 한 번** 호출하는 것입니다.
             - **절대로** 다른 도구를 호출하지 마십시오.
             - 이 Task는 오직 공고를 '검색(Search)'하는 단계입니다. '저장(Save)'은 다음 에이전트의 역할입니다.
 
-            출력: 벡터 검색된 상위 100개의 채용 공고 리스트 (JSON 형식). 툴이 반환한 결과를 그대로 출력해야 합니다.
+            출력: Hybrid 검색된 상위 20개의 채용 공고 리스트 (JSON 형식). 툴이 반환한 결과를 그대로 출력해야 합니다.
             각 공고에는 `skills_required` (필수 기술 스택)와 `skills_preferred` (우대 기술 스택) 필드가 포함됩니다.
             """,
             expected_output="""
-            벡터 검색으로 찾은 최대 100개의 채용 공고 목록을 포함한 JSON 배열.
+            Hybrid 검색으로 찾은 최대 20개의 채용 공고 목록을 포함한 JSON 배열.
+            Vector DB(의미 기반)와 Graph DB(스킬 매칭)를 결합하여 정확도가 높은 공고만 선정되었습니다.
             각 공고 객체는 `posting_id`, `company_name`, `position`, `requirements`, `preferred_points`,
             `skills_required` (JSON 배열), `skills_preferred` (JSON 배열) 등의 필드를 포함합니다.
             """,
@@ -85,7 +94,7 @@ class JobTasks:
                - 필터링된 채용 공고 목록 (fetch_job_postings_task 결과)
                - 이력서 분석 결과 (analyze_resume_task 결과)
 
-            2. 이력서와 '필터링된 공고 목록(최대 100개)'을 정밀 비교하여 매칭 점수 계산:
+            2. 이력서와 '필터링된 공고 목록(최대 20개)'을 정밀 비교하여 매칭 점수 계산:
                - 기술 스택 매칭도 (40%)
                - 경력 요구사항 적합도 (30%)
                - 우대사항 일치도 (30%)

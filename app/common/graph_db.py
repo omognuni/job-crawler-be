@@ -76,6 +76,56 @@ class GraphDBClient:
             result = session.run(query, skill_name=skill_name, limit=limit)
             return [record["posting_id"] for record in result]
 
+    def filter_postings_by_skills(
+        self, posting_ids: list[int], user_skills: list[str], limit: int = 20
+    ) -> list[dict]:
+        """
+        Vector 검색 결과를 스킬 매칭으로 재필터링합니다.
+
+        Args:
+            posting_ids: Vector 검색으로 찾은 공고 ID 리스트
+            user_skills: 사용자가 보유한 스킬 리스트
+            limit: 반환할 최대 공고 수
+
+        Returns:
+            스킬 매칭 점수가 높은 순서로 정렬된 공고 ID와 매칭 정보 리스트
+        """
+        if not posting_ids or not user_skills:
+            return []
+
+        query = """
+        UNWIND $posting_ids AS pid
+        MATCH (j:JobPosting {posting_id: pid})
+        OPTIONAL MATCH (j)-[:REQUIRES_SKILL]->(s:Skill)
+        WHERE s.name IN $user_skills
+        WITH j, COUNT(DISTINCT s) AS matched_skills, COLLECT(DISTINCT s.name) AS matched_skill_names
+        OPTIONAL MATCH (j)-[:REQUIRES_SKILL]->(all_skills:Skill)
+        WITH j, matched_skills, matched_skill_names, COUNT(DISTINCT all_skills) AS total_skills
+        WHERE matched_skills > 0
+        RETURN j.posting_id AS posting_id,
+               matched_skills,
+               matched_skill_names,
+               total_skills,
+               toFloat(matched_skills) / toFloat(total_skills) AS match_ratio
+        ORDER BY matched_skills DESC, match_ratio DESC
+        LIMIT $limit
+        """
+
+        with self._driver.session() as session:
+            result = session.run(
+                query, posting_ids=posting_ids, user_skills=user_skills, limit=limit
+            )
+            return [
+                {
+                    "posting_id": record["posting_id"],
+                    "matched_skills": record["matched_skills"],
+                    "matched_skill_names": record["matched_skill_names"],
+                    "total_skills": record["total_skills"],
+                    "match_ratio": record["match_ratio"],
+                }
+                for record in result
+            ]
+
 
 # Singleton instance
 # TODO: Move credentials to settings.py
