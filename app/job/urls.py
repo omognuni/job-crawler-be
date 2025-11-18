@@ -3,6 +3,7 @@ from job.views import (
     JobPostingViewSet,
     JobRecommendationViewSet,
     JobSearchView,
+    RecommendationsView,
     RelatedJobsView,
     ResumeViewSet,
 )
@@ -20,5 +21,10 @@ urlpatterns = [
         "related-by-skill/<str:skill_name>/",
         RelatedJobsView.as_view(),
         name="related-jobs-by-skill",
+    ),
+    path(
+        "recommend/",
+        RecommendationsView.as_view(),
+        name="realtime-recommendations",
     ),
 ]

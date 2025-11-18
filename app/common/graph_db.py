@@ -147,46 +147,92 @@ class GraphDBClient:
             result = session.run(query)
             return [record["skill_name"] for record in result]
 
-    def get_skill_statistics(self) -> dict:
+    def get_skill_statistics(self, skill_name: str = None) -> dict:
         """
         Neo4j에 저장된 스킬 통계를 반환합니다.
 
+        Args:
+            skill_name: 특정 스킬 이름 (None이면 전체 통계 반환)
+
         Returns:
+            skill_name이 있는 경우:
+            {
+                "skill_name": 스킬 이름,
+                "required_count": 필수로 요구하는 공고 수,
+                "preferred_count": 우대로 요구하는 공고 수,
+                "total_count": 전체 공고 수
+            }
+
+            skill_name이 없는 경우:
             {
                 "total_skills": 총 스킬 수,
                 "total_postings": 총 공고 수,
                 "most_required_skills": 가장 많이 요구되는 스킬 Top 10
             }
         """
-        query = """
-        MATCH (s:Skill)<-[:REQUIRES_SKILL]-(j:JobPosting)
-        WITH s, COUNT(j) AS posting_count
-        RETURN COUNT(DISTINCT s) AS total_skills,
-               COLLECT({
-                   skill: s.name,
-                   count: posting_count
-               }) AS skill_usage
-        """
+        if skill_name:
+            # 특정 스킬의 통계
+            query = """
+            MATCH (s:Skill {name: $skill_name})
+            OPTIONAL MATCH (s)<-[:REQUIRES]-(jp_req:JobPosting)
+            OPTIONAL MATCH (s)<-[:PREFERS]-(jp_pref:JobPosting)
+            RETURN s.name AS skill_name,
+                   COUNT(DISTINCT jp_req) AS required_count,
+                   COUNT(DISTINCT jp_pref) AS preferred_count,
+                   COUNT(DISTINCT jp_req) + COUNT(DISTINCT jp_pref) AS total_count
+            """
 
-        with self._driver.session() as session:
-            result = session.run(query)
-            record = result.single()
+            with self._driver.session() as session:
+                result = session.run(query, skill_name=skill_name)
+                record = result.single()
 
-            if not record:
+                if not record or not record["skill_name"]:
+                    return {
+                        "skill_name": skill_name,
+                        "required_count": 0,
+                        "preferred_count": 0,
+                        "total_count": 0,
+                    }
+
                 return {
-                    "total_skills": 0,
-                    "total_postings": 0,
-                    "most_required_skills": [],
+                    "skill_name": record["skill_name"],
+                    "required_count": record["required_count"],
+                    "preferred_count": record["preferred_count"],
+                    "total_count": record["total_count"],
                 }
+        else:
+            # 전체 통계
+            query = """
+            MATCH (s:Skill)<-[:REQUIRES_SKILL]-(j:JobPosting)
+            WITH s, COUNT(j) AS posting_count
+            RETURN COUNT(DISTINCT s) AS total_skills,
+                   COLLECT({
+                       skill: s.name,
+                       count: posting_count
+                   }) AS skill_usage
+            """
 
-            skill_usage = record["skill_usage"]
-            # 사용 빈도순 정렬
-            sorted_skills = sorted(skill_usage, key=lambda x: x["count"], reverse=True)
+            with self._driver.session() as session:
+                result = session.run(query)
+                record = result.single()
 
-            return {
-                "total_skills": record["total_skills"],
-                "most_required_skills": sorted_skills[:10],
-            }
+                if not record:
+                    return {
+                        "total_skills": 0,
+                        "total_postings": 0,
+                        "most_required_skills": [],
+                    }
+
+                skill_usage = record["skill_usage"]
+                # 사용 빈도순 정렬
+                sorted_skills = sorted(
+                    skill_usage, key=lambda x: x["count"], reverse=True
+                )
+
+                return {
+                    "total_skills": record["total_skills"],
+                    "most_required_skills": sorted_skills[:10],
+                }
 
     def create_skill_index(self):
         """
