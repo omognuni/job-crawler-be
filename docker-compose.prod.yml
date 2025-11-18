@@ -12,7 +12,6 @@ services:
       - db
     volumes:
       - ./app:/workspace/app
-      - /workspace/.venv
     command: >
       sh -c "
         uv run python manage.py collectstatic --noinput --clear &&
@@ -46,12 +45,37 @@ services:
     ports:
       - "7474:7474"
       - "7687:7687"
+    env_file:
+      - .env.prod
     environment:
-      - NEO4J_AUTH=neo4j/password
+      - NEO4J_AUTH=${NEO4J_USER:-neo4j}/${NEO4J_PASSWORD}
     volumes:
       - neo4j_data:/data
+
+  redis:
+    container_name: redis
+    image: redis:alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+  celery_worker:
+    container_name: celery_worker
+    image: ${PROD_IMAGE_NAME}
+    env_file:
+      - .env.prod
+    environment:
+      - PYTHONPATH=/workspace
+    depends_on:
+      - app
+      - redis
+    volumes:
+      - ./app:/workspace/app
+    command: uv run celery -A app.config worker -l info -c 2
 
 volumes:
   postgres_data:
   chroma_data:
   neo4j_data:
+  redis_data:

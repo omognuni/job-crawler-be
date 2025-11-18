@@ -128,5 +128,13 @@ class GraphDBClient:
 
 
 # Singleton instance
-# TODO: Move credentials to settings.py
-graph_db_client = GraphDBClient("bolt://neo4j:7687", "neo4j", "password")
+# Credentials loaded from environment variables via settings
+def _get_graph_db_client():
+    """Factory function to create GraphDB client with settings"""
+    neo4j_uri = settings.NEO4J_URI
+    neo4j_user = settings.NEO4J_USER
+    neo4j_password = settings.NEO4J_PASSWORD
+    return GraphDBClient(neo4j_uri, neo4j_user, neo4j_password)
+
+
+graph_db_client = _get_graph_db_client()

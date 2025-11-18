@@ -4,11 +4,32 @@ from user.models import User
 
 
 class UserRegistrationSerializer(serializers.ModelSerializer):
-    password = serializers.CharField(write_only=True)
+    password = serializers.CharField(
+        write_only=True,
+        min_length=8,
+        style={"input_type": "password"},
+        help_text="최소 8자 이상의 비밀번호를 입력하세요.",
+    )
 
     class Meta:
         model = User
         fields = ["username", "email", "password"]
+
+    def validate_password(self, value):
+        """
+        비밀번호 복잡도 검증
+        """
+        if len(value) < 8:
+            raise serializers.ValidationError("비밀번호는 최소 8자 이상이어야 합니다.")
+        if value.isdigit():
+            raise serializers.ValidationError(
+                "비밀번호는 숫자만으로 구성될 수 없습니다."
+            )
+        if value.isalpha():
+            raise serializers.ValidationError(
+                "비밀번호는 문자만으로 구성될 수 없습니다."
+            )
+        return value
 
     def create(self, validated_data):
         user = User.objects.create_user(

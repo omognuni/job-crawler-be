@@ -3,7 +3,7 @@ name = "job-crawler-be"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
-requires-python = ">=3.12,<3.15"
+requires-python = ">=3.12,<3.14"
 dependencies = [
     "crewai[google,google-genai,tools]>=0.86.0",
     "django>=5.2.7",
@@ -22,4 +22,8 @@ dependencies = [
     "drf-spectacular>=0.27.2",
     "drf-spectacular-sidecar>=2024.7.1",
     "djangorestframework-simplejwt>=5.3.1",
+    "django-cors-headers>=4.6.0",
+    "pytest-celery>=1.2.1",
+    "redis>=7.0.1",
+    "celery>=5.5.3",
 ]
