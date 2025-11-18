@@ -1,6 +1,7 @@
 services:
   app:
     container_name: app
+    image: melbong/job-crawler-be
     build:
       context: .
       dockerfile: Dockerfile
@@ -53,8 +54,30 @@ services:
     volumes:
       - neo4j_data:/data
 
+  redis:
+    container_name: redis
+    image: redis:alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+  celery_worker:
+    container_name: celery_worker
+    image: melbong/job-crawler-be
+    env_file:
+      - .env
+    environment:
+      - PYTHONPATH=/workspace
+    depends_on:
+      - app
+      - redis
+    volumes:
+      - ./app:/workspace/app
+    command: uv run celery -A app.config worker -l info -c 2
+
 volumes:
   postgres_data:
   chroma_data:
   neo4j_data:
-  venv:
+  redis_data:

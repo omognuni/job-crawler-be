@@ -1,3 +1,5 @@
+from functools import lru_cache
+
 from django.conf import settings
 from neo4j import GraphDatabase
 
@@ -125,6 +127,80 @@ class GraphDBClient:
                 }
                 for record in result
             ]
+
+    @lru_cache(maxsize=1)
+    def get_all_skills(self) -> list[str]:
+        """
+        Neo4j에 저장된 모든 스킬 이름을 조회합니다.
+        결과는 캐시되어 반복 호출 시 빠르게 반환됩니다.
+
+        Returns:
+            스킬 이름 리스트 (정렬됨)
+        """
+        query = """
+        MATCH (s:Skill)
+        RETURN s.name AS skill_name
+        ORDER BY s.name
+        """
+
+        with self._driver.session() as session:
+            result = session.run(query)
+            return [record["skill_name"] for record in result]
+
+    def get_skill_statistics(self) -> dict:
+        """
+        Neo4j에 저장된 스킬 통계를 반환합니다.
+
+        Returns:
+            {
+                "total_skills": 총 스킬 수,
+                "total_postings": 총 공고 수,
+                "most_required_skills": 가장 많이 요구되는 스킬 Top 10
+            }
+        """
+        query = """
+        MATCH (s:Skill)<-[:REQUIRES_SKILL]-(j:JobPosting)
+        WITH s, COUNT(j) AS posting_count
+        RETURN COUNT(DISTINCT s) AS total_skills,
+               COLLECT({
+                   skill: s.name,
+                   count: posting_count
+               }) AS skill_usage
+        """
+
+        with self._driver.session() as session:
+            result = session.run(query)
+            record = result.single()
+
+            if not record:
+                return {
+                    "total_skills": 0,
+                    "total_postings": 0,
+                    "most_required_skills": [],
+                }
+
+            skill_usage = record["skill_usage"]
+            # 사용 빈도순 정렬
+            sorted_skills = sorted(skill_usage, key=lambda x: x["count"], reverse=True)
+
+            return {
+                "total_skills": record["total_skills"],
+                "most_required_skills": sorted_skills[:10],
+            }
+
+    def create_skill_index(self):
+        """
+        Skill 노드에 인덱스를 생성하여 쿼리 성능을 향상시킵니다.
+        애플리케이션 시작 시 한 번 호출하면 됩니다.
+        """
+        index_query = """
+        CREATE INDEX skill_name_index IF NOT EXISTS
+        FOR (s:Skill)
+        ON (s.name)
+        """
+
+        with self._driver.session() as session:
+            session.run(index_query)
 
 
 # Singleton instance
