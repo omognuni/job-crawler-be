@@ -11,8 +11,6 @@ services:
       - PYTHONPATH=/workspace
     depends_on:
       - db
-    volumes:
-      - static_data:/workspace/app/static
     command: >
       sh -c "
         uv run python manage.py collectstatic --noinput --clear &&
@@ -76,7 +74,6 @@ services:
     command: uv run celery -A app.config worker -l info -c 2
 
 volumes:
-  static_data:
   postgres_data:
   chroma_data:
   neo4j_data:
