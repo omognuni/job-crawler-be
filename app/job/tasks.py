@@ -195,14 +195,21 @@ def process_resume(self, user_id: int):
 {resume.content[:3000]}
 
 요구사항:
-1. career_years: 총 경력 연차를 정수로 추출 (예: 3, 5, 0). 경력이 명시되지 않으면 0
+1. career_years: 모든 경력 기간을 합산하여 총 경력 연차를 정수로 계산하세요.
+   - 재직중인 경우 현재 날짜(2025년 11월)까지 계산
+   - 소수점 이하는 반올림 (예: 1.8년 → 2년)
+   - 예시: "2023.03.06 - 2024.07.01" (약 1.3년) + "2024.07.29 - 재직중" (약 1.3년) = 총 2.6년 → 3년
+   - 경력이 없으면 0
+
 2. strengths: 지원자의 핵심 강점을 한국어로 1-2줄로 요약 (50자 이내)
+   - 주요 기술적 성과나 개선 사항 중심으로 요약
+
 3. experience_summary: 경력 요약을 한국어로 3-5줄로 작성 (임베딩용, 200자 이내)
    - 주요 프로젝트와 성과 포함
    - 핵심 기술 스택 언급
    - 경력 연차와 포지션 포함
 
-반드시 다음 JSON 형식으로만 응답하세요:
+반드시 다음 JSON 형식으로만 응답하세요 (다른 텍스트 없이 JSON만):
 {{
   "career_years": 숫자,
   "strengths": "강점 설명",
@@ -211,7 +218,7 @@ def process_resume(self, user_id: int):
 """
 
                 response = client.models.generate_content(
-                    model="gemini-2.0-flash-exp",
+                    model="gemini-2.5-flash",
                     contents=prompt,
                     config=GenerateContentConfig(
                         temperature=0.1,

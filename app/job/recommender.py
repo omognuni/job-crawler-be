@@ -46,20 +46,28 @@ def get_recommendations(user_id: int, limit: int = 10) -> List[Dict]:
             ids=[str(user_id)], include=["embeddings"]
         )
 
-        if not resume_vector or not resume_vector.get("embeddings"):
+        # 임베딩 검증 (numpy 배열 대응)
+        embeddings = resume_vector.get("embeddings") if resume_vector else None
+        if embeddings is None or (
+            hasattr(embeddings, "__len__") and len(embeddings) == 0
+        ):
             logger.warning(f"No embedding found for user {user_id}")
             return []
 
         # 유사한 공고 50개 조회
         query_results = job_postings_collection.query(
-            query_embeddings=resume_vector["embeddings"], n_results=50
+            query_embeddings=embeddings, n_results=50
         )
 
-        if not query_results or not query_results.get("ids"):
+        # 결과 검증 (numpy 배열 대응)
+        result_ids = query_results.get("ids") if query_results else None
+        if result_ids is None or (
+            hasattr(result_ids, "__len__") and len(result_ids) == 0
+        ):
             logger.info(f"No job postings found for user {user_id}")
             return []
 
-        candidate_posting_ids = [int(pid) for pid in query_results["ids"][0]]
+        candidate_posting_ids = [int(pid) for pid in result_ids[0]]
 
         # 3. Neo4j로 스킬 그래프 매칭하여 20개로 정제
         matched_postings = _filter_by_skill_graph(candidate_posting_ids, user_skills)[
