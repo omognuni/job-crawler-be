@@ -149,9 +149,9 @@ def extract_skills(text: str) -> List[str]:
 
 def extract_skills_from_job_posting(
     requirements: str, preferred_points: str = "", main_tasks: str = ""
-) -> tuple[List[str], List[str]]:
+) -> tuple[List[str], str]:
     """
-    채용 공고에서 필수 스킬과 우대 스킬을 추출합니다.
+    채용 공고에서 필수 스킬과 우대 사항을 추출합니다.
 
     Args:
         requirements: 자격 요건 텍스트
@@ -159,19 +159,18 @@ def extract_skills_from_job_posting(
         main_tasks: 주요 업무 텍스트 (참고용)
 
     Returns:
-        (필수 스킬 리스트, 우대 스킬 리스트) 튜플
+        (필수 스킬 리스트, 우대 사항 원문) 튜플
     """
     # 필수 스킬: requirements + main_tasks에서 추출
     required_text = f"{requirements} {main_tasks}"
     skills_required = extract_skills(required_text)
 
-    # 우대 스킬: preferred_points에서 추출
-    skills_preferred = extract_skills(preferred_points)
+    # 우대 사항: 원문에서 공백만 제거하여 저장
+    skills_preferred_text = (
+        " ".join(preferred_points.split()) if preferred_points else ""
+    )
 
-    # 우대 스킬에서 이미 필수 스킬에 있는 것 제거 (중복 방지)
-    skills_preferred = [s for s in skills_preferred if s not in skills_required]
-
-    return skills_required, skills_preferred
+    return skills_required, skills_preferred_text
 
 
 def get_all_skills() -> List[str]:

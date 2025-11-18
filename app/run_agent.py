@@ -8,8 +8,8 @@ from django.conf import settings
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
 django.setup()
 
-from agent.crew import JobHunterCrew
 from job.models import JobRecommendation, Resume
+from job.recommender import get_recommendations
 
 
 def send_slack_message(message_text: str) -> bool:
@@ -55,53 +55,57 @@ def main():
             print(f"{'='*60}")
 
             try:
-                crew = JobHunterCrew(user_id=resume_obj.user_id)
-                result = crew.run()
+                # AI-Free 추천 엔진 사용
+                recommendations_data = get_recommendations(
+                    user_id=resume_obj.user_id, limit=20
+                )
 
-                # result 검증
-                if result is None:
-                    error_msg = (
-                        f"❌ User {resume_obj.user_id}: Agent 실행 결과가 None입니다."
-                    )
-                    print(f"\n[오류] {error_msg}")
-                    send_slack_message(error_msg)
+                # 추천 결과 검증
+                if not recommendations_data:
+                    warning_msg = f"⚠️ User {resume_obj.user_id}: 추천 결과가 없습니다."
+                    print(f"\n[경고] {warning_msg}")
+                    send_slack_message(warning_msg)
                     continue
 
-                # json_dict 추출 및 검증
-                data = None
-                if hasattr(result, "json_dict"):
-                    data = result.json_dict
-                elif hasattr(result, "raw"):
-                    # Fallback: raw 출력에서 JSON 파싱 시도
+                # JobRecommendation 모델에 저장
+                saved_count = 0
+                recommendations = []
+
+                for rec_data in recommendations_data:
                     try:
-                        data = json.loads(result.raw)
-                    except (json.JSONDecodeError, TypeError):
-                        pass
+                        # 기존 추천이 있으면 업데이트, 없으면 생성
+                        recommendation, created = (
+                            JobRecommendation.objects.update_or_create(
+                                user_id=resume_obj.user_id,
+                                job_posting_id=rec_data["posting_id"],
+                                defaults={
+                                    "match_score": rec_data["match_score"],
+                                    "match_reason": rec_data["match_reason"],
+                                },
+                            )
+                        )
+                        saved_count += 1
 
-                if data is None or not isinstance(data, dict):
-                    recent_recs = (
-                        JobRecommendation.objects.filter(user_id=resume_obj.user_id)
-                        .select_related("job_posting")
-                        .order_by("-created_at")[:10]
-                    )
-
-                    data = {
-                        "recommendations": [
+                        # Slack 메시지용 데이터 구성
+                        recommendations.append(
                             {
-                                "company_name": rec.job_posting.company_name,
-                                "position": rec.job_posting.position,
-                                "url": rec.job_posting.url,
-                                "match_score": (
-                                    int(rec.match_score) if rec.match_score else 0
-                                ),
-                                "match_reason": rec.match_reason or "이전 추천",
+                                "company_name": rec_data["company_name"],
+                                "position": rec_data["position"],
+                                "url": rec_data["url"],
+                                "match_score": rec_data["match_score"],
+                                "match_reason": rec_data["match_reason"],
                             }
-                            for rec in recent_recs
-                        ]
-                    }
+                        )
+                    except Exception as e:
+                        print(
+                            f"[경고] 추천 저장 실패 (posting_id={rec_data.get('posting_id')}): {e}"
+                        )
+                        continue
+
+                print(f"[정보] {saved_count}개의 추천을 DB에 저장했습니다.")
 
                 # recommendations 추출
-                recommendations = data.get("recommendations", [])
+                recommendations = recommendations[:10]  # 최대 10개
 
                 if not recommendations:
                     warning_msg = (
@@ -116,24 +120,20 @@ def main():
                     f"✨ User {resume_obj.user_id}님을 위한 {len(recommendations)}개의 채용 공고 추천 ✨\n"
                 ]
 
-                for rec in recommendations[:10]:  # 최대 10개만 전송
+                for rec in recommendations:
                     company_name = rec.get("company_name", "N/A")
                     position = rec.get("position", "N/A")
                     url = rec.get("url", "#")
                     match_score = rec.get("match_score", "N/A")
+                    match_reason = rec.get("match_reason", "")
 
                     message_lines.append(
-                        f"🏢 {company_name} - {position} (매칭: {match_score}%)\n<{url}|공고 보기>"
+                        f"🏢 {company_name} - {position} (매칭: {match_score}점)\n   └ {match_reason}\n   <{url}|공고 보기>"
                     )
 
                 message_text = "\n".join(message_lines)
                 print(f"\n[성공] {len(recommendations)}개의 추천 완료")
                 send_slack_message(message_text)
-
-            except ValueError as e:
-                error_msg = f"❌ User {resume_obj.user_id}: 설정 오류 - {e}"
-                print(f"\n[오류] {error_msg}")
-                send_slack_message(error_msg)
 
             except Exception as e:
                 error_msg = f"❌ User {resume_obj.user_id}: 예상치 못한 오류 - {type(e).__name__}: {e}"
