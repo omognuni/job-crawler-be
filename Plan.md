@@ -21,54 +21,81 @@ AI 비용 절감 및 응답 속도 개선을 위한 아키텍처 재설계
 
 ## 1단계: 비동기 기반 구축 (Celery + Redis)
 
-### Agent 1 - 구현 작업
-- [ ] `pyproject.toml`에 `celery>=5.4.0`, `redis>=5.0.7` 의존성 추가
-- [ ] `docker-compose.prod.yml`에 `redis` 서비스 추가 (`redis:alpine`)
-- [ ] `docker-compose.prod.yml`에 `celery_worker` 서비스 추가
-  - `command`: `uv run celery -A config worker -l info -c 2`
+### Agent 1 - 구현 작업 ✅ 완료
+- [x] `pyproject.toml`에 `celery>=5.4.0`, `redis>=5.0.7` 의존성 추가
+- [x] `docker-compose.prod.yml`에 `redis` 서비스 추가 (`redis:alpine`)
+- [x] `docker-compose.prod.yml`에 `celery_worker` 서비스 추가
+  - `command`: `uv run celery -A app.config worker -l info -c 2`
   - `depends_on`: `app`, `redis`
-- [ ] `app/config/celery.py` 파일 생성 및 Celery 앱 정의
-- [ ] `app/config/__init__.py`에 Celery 앱 로드 코드 추가
-- [ ] `app/config/settings.py`에 Celery 설정 추가
+- [x] `app/config/celery.py` 파일 생성 및 Celery 앱 정의
+- [x] `app/config/__init__.py`에 Celery 앱 로드 코드 추가
+- [x] `app/config/settings.py`에 Celery 설정 추가
   - `CELERY_BROKER_URL = 'redis://redis:6379/0'`
   - `CELERY_RESULT_BACKEND = 'redis://redis:6379/0'`
 
-### Agent 2 - 테스트 작업
-- [ ] `tests/test_celery_config.py` 생성
+#### 추가 완료 사항 (보안 강화)
+- [x] 하드코딩된 Neo4j 비밀번호를 환경 변수로 이동
+- [x] SECRET_KEY와 API_SECRET_KEY 분리
+- [x] 보안 헤더 설정 (XSS, HSTS, CORS 등)
+- [x] Docker non-root 사용자 설정
+- [x] 비밀번호 복잡도 검증 추가
+- [x] SECURITY.md 문서 작성
+
+### Agent 2 - 테스트 작업 ✅ 완료
+- [x] `tests/test_celery_config.py` 생성
   - Celery 앱 초기화 테스트
   - Redis 연결 테스트
-- [ ] `tests/conftest.py`에 Celery 테스트용 픽스처 추가
+- [x] `tests/conftest.py`에 Celery 테스트용 픽스처 추가
   - `@pytest.fixture` celery_app
   - `@pytest.fixture` celery_worker
-- [ ] Celery worker 시작/중지 테스트
-- [ ] 간단한 더미 태스크로 비동기 작업 실행 테스트
+  - `@pytest.fixture` celery_eager_mode
+- [x] Celery worker 시작/중지 테스트
+- [x] 간단한 더미 태스크로 비동기 작업 실행 테스트
+
+#### 추가 완료 테스트
+- [x] Celery 브로커 설정 테스트
+- [x] Celery 직렬화 설정 테스트
+- [x] Celery 타임존 설정 테스트
+- [x] Celery 태스크 타임아웃 설정 테스트
+- [x] 총 9개 테스트 모두 통과 ✅
 
 ---
 
 ## 2단계: LLM-Free 스킬 추출기 구현
 
-### Agent 1 - 구현 작업
-- [ ] Neo4j에 `Skill` 노드 모델 정의 (또는 PostgreSQL 테이블)
-  - 필드: `name` (스킬명), `patterns` (검색 정규식 리스트)
-- [ ] 마스터 스킬 목록 시드 데이터 준비
-  - 예: `Python`, `C++`, `AWS`, `Django`, `React` 등
-  - 각 스킬별 정규식 패턴
-- [ ] `app/job/skill_extractor.py` 생성
+### Agent 1 - 구현 작업 ✅ 완료
+- [x] Neo4j에 `Skill` 노드 모델 정의
+  - `Skill` 노드는 `name` 속성으로 저장
+  - `(JobPosting)-[:REQUIRES_SKILL]->(Skill)` 관계 정의
+- [x] 마스터 스킬 목록 시드 데이터 준비
+  - 총 85개 스킬 정의 (Backend, Frontend, Mobile, DB, Cloud/DevOps, Tools, Data/AI)
+  - 각 스킬별 정규식 패턴 (영어/한글 포함)
+- [x] `app/job/skill_extractor.py` 생성
   - `extract_skills(text: str) -> list[str]` 함수 구현
-  - 스킬 딕셔너리 로딩 (캐싱 적용)
-  - 텍스트 정규화 및 패턴 매칭 로직
-- [ ] Neo4j 쿼리 최적화 (스킬 목록 캐싱)
+  - `extract_skills_from_job_posting()` 함수 추가
+  - `@lru_cache` 데코레이터로 패턴 컴파일 캐싱
+  - 정규식 패턴 매칭 로직 (대소문자 무시)
+- [x] Neo4j 쿼리 최적화 (스킬 목록 캐싱)
+  - `get_all_skills()` 메서드 추가 (@lru_cache)
+  - `get_skill_statistics()` 메서드 추가
+  - `create_skill_index()` 메서드 추가 (성능 향상)
 
-### Agent 2 - 테스트 작업
-- [ ] `tests/job/test_skill_extractor.py` 생성
-- [ ] 스킬 추출 기본 테스트
-  - "Python과 Django 경험 필수" → `['Python', 'Django']`
-  - "C++, Java 개발자" → `['C++', 'Java']`
-- [ ] 대소문자 무시 테스트
-- [ ] 특수문자 처리 테스트 (C++, C#)
-- [ ] 동의어/별칭 처리 테스트 (AWS vs Amazon Web Services)
-- [ ] 빈 텍스트, None 입력 엣지 케이스 테스트
-- [ ] 성능 테스트 (1000자 텍스트 처리 시간)
+### Agent 2 - 테스트 작업 ✅ 완료
+- [x] `tests/job/test_skill_extractor.py` 생성
+- [x] 스킬 추출 기본 테스트
+  - "Python과 Django 경험 필수" → `['Django', 'Python']` ✅
+  - "C++, Java 개발자" → `['C++', 'Java']` ✅
+- [x] 대소문자 무시 테스트
+  - lowercase, UPPERCASE, MixedCase 모두 인식 ✅
+- [x] 특수문자 처리 테스트 (C++, C#)
+  - C++, C#, Vue.js 정상 인식 ✅
+- [x] 한글 패턴 테스트
+  - 파이썬, 장고, 리액트 인식 ✅
+- [x] 동의어/별칭 처리 테스트
+  - js→JavaScript, postgres→PostgreSQL, k8s→Kubernetes ✅
+- [x] 빈 텍스트, None 입력 엣지 케이스 테스트 ✅
+- [x] 성능 테스트 (1000자 텍스트 0.1초 이내 처리) ✅
+- [x] 총 29개 테스트 모두 통과 ✅
 
 ---
 
