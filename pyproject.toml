@@ -26,4 +26,5 @@ dependencies = [
     "pytest-celery>=1.2.1",
     "redis>=7.0.1",
     "celery>=5.5.3",
+    "pylint-django>=2.6.1",
 ]
