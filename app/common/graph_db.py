@@ -174,12 +174,11 @@ class GraphDBClient:
             # 특정 스킬의 통계
             query = """
             MATCH (s:Skill {name: $skill_name})
-            OPTIONAL MATCH (s)<-[:REQUIRES]-(jp_req:JobPosting)
-            OPTIONAL MATCH (s)<-[:PREFERS]-(jp_pref:JobPosting)
+            OPTIONAL MATCH (s)<-[:REQUIRES_SKILL]-(jp:JobPosting)
             RETURN s.name AS skill_name,
-                   COUNT(DISTINCT jp_req) AS required_count,
-                   COUNT(DISTINCT jp_pref) AS preferred_count,
-                   COUNT(DISTINCT jp_req) + COUNT(DISTINCT jp_pref) AS total_count
+                   COUNT(DISTINCT jp) AS required_count,
+                   0 AS preferred_count,
+                   COUNT(DISTINCT jp) AS total_count
             """
 
             with self._driver.session() as session:

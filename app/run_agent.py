@@ -8,6 +8,7 @@ from django.conf import settings
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
 django.setup()
 
+from django.db import transaction
 from job.models import JobRecommendation, Resume
 from job.recommender import get_recommendations
 
@@ -67,43 +68,60 @@ def main():
                     send_slack_message(warning_msg)
                     continue
 
-                # JobRecommendation 모델에 저장
+                # 1. 점수 기준 정렬
+                sorted_recommendations_data = sorted(
+                    recommendations_data, key=lambda x: x["match_score"], reverse=True
+                )
+
+                recommendations = []  # Slack/API 응답용 리스트
+                new_recommendation_objects = []  # DB 저장용 모델 인스턴스 리스트
                 saved_count = 0
-                recommendations = []
 
-                for rec_data in recommendations_data:
-                    try:
-                        # 기존 추천이 있으면 업데이트, 없으면 생성
-                        recommendation, created = (
-                            JobRecommendation.objects.update_or_create(
-                                user_id=resume_obj.user_id,
-                                job_posting_id=rec_data["posting_id"],
-                                defaults={
-                                    "match_score": rec_data["match_score"],
-                                    "match_reason": rec_data["match_reason"],
-                                },
+                try:
+                    # 2. 트랜잭션 시작 (삭제와 생성을 하나의 작업으로 묶음)
+                    with transaction.atomic():
+                        # 3. 해당 유저의 기존 추천 내역을 '모두' 삭제 (Reset)
+                        JobRecommendation.objects.filter(
+                            user_id=resume_obj.user_id
+                        ).delete()
+
+                        # 4. 새로운 추천 객체 리스트 생성
+                        for i, rec_data in enumerate(sorted_recommendations_data):
+                            try:
+                                rec_obj = JobRecommendation(
+                                    user_id=resume_obj.user_id,
+                                    job_posting_id=rec_data["posting_id"],
+                                    rank=i + 1,  # 1위부터 순서대로 랭크 부여
+                                    match_score=rec_data["match_score"],
+                                    match_reason=rec_data["match_reason"],
+                                )
+                                new_recommendation_objects.append(rec_obj)
+
+                                recommendations.append(
+                                    {
+                                        "company_name": rec_data["company_name"],
+                                        "position": rec_data["position"],
+                                        "url": rec_data["url"],
+                                        "match_score": rec_data["match_score"],
+                                        "match_reason": rec_data["match_reason"],
+                                    }
+                                )
+                            except Exception as e:
+                                print(
+                                    f"[경고] 데이터 처리 중 오류 (posting_id={rec_data.get('posting_id')}): {e}"
+                                )
+                                continue
+
+                        if new_recommendation_objects:
+                            JobRecommendation.objects.bulk_create(
+                                new_recommendation_objects
                             )
-                        )
-                        saved_count += 1
+                            saved_count = len(new_recommendation_objects)
 
-                        # Slack 메시지용 데이터 구성
-                        recommendations.append(
-                            {
-                                "company_name": rec_data["company_name"],
-                                "position": rec_data["position"],
-                                "url": rec_data["url"],
-                                "match_score": rec_data["match_score"],
-                                "match_reason": rec_data["match_reason"],
-                            }
-                        )
-                    except Exception as e:
-                        print(
-                            f"[경고] 추천 저장 실패 (posting_id={rec_data.get('posting_id')}): {e}"
-                        )
-                        continue
+                except Exception as e:
+                    print(f"[오류] 추천 내역 저장 트랜잭션 실패: {e}")
 
                 print(f"[정보] {saved_count}개의 추천을 DB에 저장했습니다.")
-
                 # recommendations 추출
                 recommendations = recommendations[:10]  # 최대 10개
 

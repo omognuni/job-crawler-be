@@ -135,11 +135,8 @@ def _filter_by_skill_graph(posting_ids: List[int], user_skills: set) -> List[int
         try:
             # Neo4j에서 공고의 필수/우대 스킬 조회
             query = """
-            MATCH (jp:JobPosting {posting_id: $posting_id})-[:REQUIRES]->(skill:Skill)
+            MATCH (jp:JobPosting {posting_id: $posting_id})-[:REQUIRES_SKILL]->(skill:Skill)
             RETURN skill.name AS skill_name, 'required' AS skill_type
-            UNION
-            MATCH (jp:JobPosting {posting_id: $posting_id})-[:PREFERS]->(skill:Skill)
-            RETURN skill.name AS skill_name, 'preferred' AS skill_type
             """
 
             result = graph_db_client.execute_query(query, {"posting_id": posting_id})
