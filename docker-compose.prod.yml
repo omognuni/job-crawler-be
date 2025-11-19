@@ -15,7 +15,13 @@ services:
       sh -c "
         uv run python manage.py collectstatic --noinput --clear &&
         uv run python manage.py migrate &&
-        uv run gunicorn app.config.wsgi:application --bind 0.0.0.0:8000
+        uv run gunicorn app.config.wsgi:application \
+          --bind 0.0.0.0:8000 \
+          --workers 2 \
+          --threads 4 \
+          --worker-class gthread \
+          --timeout 120 \
+          --keep-alive 5
       "
 
   db:
