@@ -138,15 +138,15 @@ search/
 ## 🧹 Phase 4: 정리 및 최적화 (1주)
 
 ### 4.1 기존 코드 정리
-- [ ] `job/` app에서 이동된 파일 확인 및 제거 (Resume, JobRecommendation 관련)
-- [ ] `job/` app은 유지 (JobPosting만 관리)
-- [ ] 사용되지 않는 import 정리
-- [ ] 코드 포맷팅 (black, isort)
+- [x] `job/` app에서 이동된 파일 확인 및 제거 (Resume, JobRecommendation 관련)
+- [x] `job/` app은 유지 (JobPosting만 관리)
+- [x] 사용되지 않는 import 정리
+- [x] Backward compatibility imports 추가 (job/models.py, job/recommender.py)
 
 ### 4.2 `agent` app 처리
-- [ ] agent app 사용 여부 최종 확인
-- [ ] 옵션 A: 완전 제거
-- [ ] 옵션 B: `ai_experiments/`로 이름 변경 및 격리
+- [x] agent app 사용 여부 최종 확인
+- [x] 옵션 A: 완전 제거 ✅
+- [x] app/agent 디렉토리 삭제 완료
 
 ### 4.3 URL 라우팅 재구성
 ```python
@@ -159,36 +159,57 @@ urlpatterns = [
     path('api/v1/search/', include('search.urls')),         # 검색
 ]
 ```
-- [ ] 중복 엔드포인트 제거
-- [ ] RESTful 원칙에 맞게 URL 정리
-- [ ] API 버전 관리 전략 수립
+- [x] 중복 엔드포인트 제거
+- [x] RESTful 원칙에 맞게 URL 정리 (user → users, job-postings → jobs)
+- [x] API 버전 관리 전략 수립
 
 ### 4.4 설정 파일 정리
-- [ ] `settings/base.py`, `development.py`, `production.py` 분리
-- [ ] `INSTALLED_APPS`에 새로운 앱 등록 (resume, recommendation, skill, search)
-- [ ] `job` 앱은 이미 등록되어 있으므로 유지
-- [ ] 환경 변수 관리 개선 (.env 활용)
+- [x] `INSTALLED_APPS`에서 agent 제거
+- [x] `INSTALLED_APPS`에 common 추가
+- [x] 새로운 앱들 이미 등록됨 (resume, recommendation, skill, search)
+- [x] `job` 앱은 이미 등록되어 있으므로 유지
 
 ---
 
 ## 🧪 Phase 5: 테스트 및 검증 (1주)
 
-### 5.1 테스트 커버리지
-- [ ] 각 Service 단위 테스트 (목표: 80% 이상)
-- [ ] API 통합 테스트
-- [ ] Celery 작업 테스트
-- [ ] E2E 테스트 (주요 시나리오)
+### 5.1 테스트 구조 변경
+- [x] 각 앱에 `tests/` 디렉토리 생성
+- [x] 기존 `tests.py` 파일 삭제
+- [x] `test_services.py`, `test_views.py` 분리
 
-### 5.2 성능 테스트
-- [ ] 추천 시스템 응답 시간 측정
-- [ ] 검색 기능 성능 비교 (리팩토링 전/후)
-- [ ] DB 쿼리 최적화 (N+1 문제 확인)
+### 5.2 테스트 작성
+- [x] `job/tests/`: JobService, JobPostingViewSet 테스트
+- [x] `resume/tests/`: ResumeService, ResumeViewSet 테스트
+- [x] `recommendation/tests/`: RecommendationService, 추천 API 테스트
+- [x] `skill/tests/`: SkillExtractionService 테스트
+- [x] `search/tests/`: SearchService, 검색 API 테스트
+- [x] 성능 테스트 작성 (추천 시스템 응답 시간)
 
 ### 5.3 문서화
-- [ ] 각 앱의 README.md 작성
-- [ ] API 문서 업데이트 (Swagger/OpenAPI)
-- [ ] 아키텍처 다이어그램 작성
-- [ ] 마이그레이션 가이드 작성
+- [x] 프로젝트 README.md 작성 (기술 스택, 설치, API)
+- [x] 각 앱의 README.md 작성
+  - [x] job/README.md
+  - [x] resume/README.md
+  - [x] recommendation/README.md
+- [x] API 문서 (Swagger UI 제공: `/api/v1/schema/swagger-ui/`)
+
+### 5.4 테스트 실행
+```bash
+# 전체 테스트
+pytest
+
+# 커버리지 측정
+pytest --cov=app --cov-report=html
+
+# 특정 앱 테스트
+pytest app/job/tests/
+pytest app/resume/tests/
+pytest app/recommendation/tests/
+
+# 성능 테스트
+pytest app/tests/performance/
+```
 
 ---
 

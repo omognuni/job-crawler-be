@@ -1,5 +1,13 @@
 from django.db import models, transaction
 
+# Backward compatibility imports
+# Resume and JobRecommendation have been moved to separate apps
+# These imports maintain compatibility with existing code
+from recommendation.models import JobRecommendation  # noqa: F401
+from resume.models import Resume  # noqa: F401
+
+__all__ = ["JobPosting", "Resume", "JobRecommendation"]
+
 
 class JobPosting(models.Model):
     posting_id = models.IntegerField(primary_key=True)

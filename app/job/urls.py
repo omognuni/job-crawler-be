@@ -3,7 +3,7 @@ from job.views import JobPostingViewSet
 from rest_framework.routers import DefaultRouter
 
 router = DefaultRouter()
-router.register(r"job-postings", JobPostingViewSet, basename="jobposting")
+router.register(r"", JobPostingViewSet, basename="job")
 
 urlpatterns = [
     path("", include(router.urls)),

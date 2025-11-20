@@ -8,7 +8,10 @@ import logging
 import time
 
 from recommendation.models import JobRecommendation
-from recommendation.serializers import JobRecommendationSerializer
+from recommendation.serializers import (
+    JobRecommendationReadSerializer,
+    JobRecommendationWriteSerializer,
+)
 from recommendation.services import RecommendationService
 from rest_framework import status
 from rest_framework.decorators import action
@@ -28,8 +31,18 @@ class JobRecommendationViewSet(ModelViewSet):
     """
 
     queryset = JobRecommendation.objects.all()
-    serializer_class = JobRecommendationSerializer
     permission_classes = [AllowAny]
+
+    def get_serializer_class(self):
+        """
+        action에 따라 적절한 Serializer 반환
+
+        - 읽기 작업 (list, retrieve): JobRecommendationReadSerializer
+        - 쓰기 작업 (create, update, partial_update): JobRecommendationWriteSerializer
+        """
+        if self.action in ["create", "update", "partial_update"]:
+            return JobRecommendationWriteSerializer
+        return JobRecommendationReadSerializer
 
     def list(self, request, *args, **kwargs):
         """
@@ -97,6 +110,7 @@ class JobRecommendationViewSet(ModelViewSet):
         POST /api/v1/recommendations/
         """
         try:
+            # Write Serializer로 데이터 검증
             serializer = self.get_serializer(data=request.data)
             serializer.is_valid(raise_exception=True)
 
@@ -104,7 +118,8 @@ class JobRecommendationViewSet(ModelViewSet):
                 serializer.validated_data
             )
 
-            response_serializer = self.get_serializer(recommendation)
+            # Read Serializer로 응답 반환
+            response_serializer = JobRecommendationReadSerializer(recommendation)
             return Response(response_serializer.data, status=status.HTTP_201_CREATED)
         except Exception as e:
             logger.error(f"Failed to create recommendation: {str(e)}", exc_info=True)

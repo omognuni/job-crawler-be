@@ -55,14 +55,14 @@ INSTALLED_APPS = [
     "drf_spectacular",
     "drf_spectacular_sidecar",
     "rest_framework_simplejwt",
-    # 기존 앱
-    "agent",  # TODO: deprecated 예정
-    "job.apps.JobConfig",  # TODO: Phase 2 완료 후 제거
+    # Custom apps
+    "job.apps.JobConfig",
     "user",
     "skill.apps.SkillConfig",
     "search.apps.SearchConfig",
     "resume.apps.ResumeConfig",
     "recommendation.apps.RecommendationConfig",
+    "common",
 ]
 
 MIDDLEWARE = [

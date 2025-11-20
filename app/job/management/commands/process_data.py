@@ -9,7 +9,8 @@ import time
 from celery import group
 from django.core.management.base import BaseCommand
 from job.models import JobPosting, Resume
-from job.tasks import process_job_posting, process_resume
+from job.tasks import process_job_posting
+from resume.tasks import process_resume
 
 
 class Command(BaseCommand):
