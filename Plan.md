@@ -487,46 +487,21 @@ def old_recommend_view(request):
 **체크포인트:**
 - [ ] Git tag 생성: `v1.0-phase2.2-complete`
 - [ ] 데이터베이스 백업
+--------------Done-------------------
 
-### 2.3 `job_posting` app 분리
-
-**모델 마이그레이션:**
-- [ ] `JobPosting` 모델을 `job_posting/models.py`로 복사
-- [ ] `Meta.db_table = 'agent_job_posting'` 설정 (기존 테이블명 유지)
-- [ ] `uv run python manage.py makemigrations job_posting`
-- [ ] `uv run python manage.py migrate --fake job_posting`
-- [ ] `job/models.py`에서 JobPosting 제거
-- [ ] `uv run python manage.py makemigrations job`
-- [ ] `uv run python manage.py migrate job`
-- [ ] 데이터 무결성 검증 (row count 확인)
-
-**시리얼라이저 및 뷰:**
-- [ ] `JobPostingSerializer` → `job_posting/serializers.py`로 이동
-- [ ] `JobPostingViewSet` → `job_posting/views.py`로 이동
-- [ ] CRUD 엔드포인트 테스트
-- [ ] `job_posting/urls.py` 생성 및 라우팅 설정
+### 2.3 `job` 앱 리팩토링
 
 **Service Layer:**
-- [ ] `job_posting/services.py` 생성
-- [ ] `JobPostingService` 클래스 구현
+- [ ] `job/services.py` 생성
+- [ ] `JobService` 클래스 구현
 - [ ] Neo4j 연동 로직 캡슐화
 - [ ] ChromaDB 임베딩 로직 캡슐화
 
 **Celery 작업:**
-- [ ] `process_job_posting_task` → `job_posting/tasks.py`로 이동
 - [ ] `config/celery.py`에서 작업 경로 업데이트
 - [ ] Celery worker 재시작
 - [ ] 작업 등록 확인: `celery -A config inspect registered`
 - [ ] 테스트 작업 실행 및 확인
-
-**권한 처리:**
-- [ ] `job/permissions.py`에서 JobPosting 관련 권한 확인
-- [ ] 필요 시 `job_posting/permissions.py`로 이동
-
-**임포트 경로 업데이트:**
-- [ ] `from job.models import JobPosting` 전역 검색
-- [ ] `from job_posting.models import JobPosting`으로 변경
-- [ ] 모든 파일에서 임포트 업데이트
 
 **테스트:**
 - [ ] 단위 테스트 작성

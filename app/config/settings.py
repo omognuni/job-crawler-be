@@ -59,12 +59,10 @@ INSTALLED_APPS = [
     "agent",  # TODO: deprecated 예정
     "job.apps.JobConfig",  # TODO: Phase 2 완료 후 제거
     "user",
-    # 새로운 앱 (Phase 1.3에서 생성)
-    "skill",
-    "search",
-    "job_posting",
-    "resume",
-    "recommendation",
+    "skill.apps.SkillConfig",
+    "search.apps.SearchConfig",
+    "resume.apps.ResumeConfig",
+    "recommendation.apps.RecommendationConfig",
 ]
 
 MIDDLEWARE = [

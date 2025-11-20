@@ -38,6 +38,8 @@ urlpatterns = [
     path("api/v1/user/", include("user.urls")),
     path("api/v1/skills/", include("skill.urls")),  # Phase 2.1: skill app
     path("api/v1/search/", include("search.urls")),  # Phase 2.2: search app
+    path("api/v1/resumes/", include("resume.urls")),
+    path("api/v1/recommendations/", include("recommendation.urls")),
     path("health/", health_check, name="health_check"),
     # Spectacular
     path("api/v1/schema/", SpectacularAPIView.as_view(), name="schema"),
