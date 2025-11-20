@@ -1,10 +1,10 @@
 from django.urls import include, path
 from rest_framework.routers import DefaultRouter
+from resume.views import ResumeViewSet
 
-# TODO: ViewSet 이동 후 라우터 설정
-# router = DefaultRouter()
-# router.register(r"", ResumeViewSet, basename="resume")
+router = DefaultRouter()
+router.register(r"", ResumeViewSet, basename="resume")
 
 urlpatterns = [
-    # path("", include(router.urls)),
+    path("", include(router.urls)),
 ]
