@@ -3,7 +3,7 @@
 """
 
 import pytest
-from job.skill_extractor import (
+from skill.services import (
     extract_skills,
     extract_skills_from_job_posting,
     get_all_skills,

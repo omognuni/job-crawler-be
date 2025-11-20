@@ -55,9 +55,16 @@ INSTALLED_APPS = [
     "drf_spectacular",
     "drf_spectacular_sidecar",
     "rest_framework_simplejwt",
-    "agent",
-    "job.apps.JobConfig",
+    # 기존 앱
+    "agent",  # TODO: deprecated 예정
+    "job.apps.JobConfig",  # TODO: Phase 2 완료 후 제거
     "user",
+    # 새로운 앱 (Phase 1.3에서 생성)
+    "skill",
+    "search",
+    "job_posting",
+    "resume",
+    "recommendation",
 ]
 
 MIDDLEWARE = [

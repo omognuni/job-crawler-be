@@ -1,15 +1,13 @@
 import json
-import operator
-from functools import reduce
 from typing import Annotated
 
-from common.graph_db import graph_db_client
-from common.vector_db import vector_db_client
 from crewai.tools import tool
-from django.db.models import Case, Q, When
 from django.utils import timezone
 from job.models import JobPosting, JobRecommendation, Resume
-from job.signals import SKILL_LIST, _extract_resume_details
+
+# Phase 2.2: search 서비스 분리 완료
+# - vector_search_job_postings_tool → search.services 사용
+# - hybrid_search_job_postings_tool → search.services 사용
 
 
 @tool("Vector Search Job Postings Tool")
@@ -19,57 +17,12 @@ def vector_search_job_postings_tool(
 ) -> str:
     """
     주어진 쿼리 텍스트와 의미적으로 유사한 채용 공고를 벡터 DB에서 검색합니다.
-    토큰 효율을 위해 상위 20개만 반환합니다.
+
+    Phase 2.2: search.services.SearchService 사용
     """
-    # print(
-    #     f"[Tool Call] vector_search_job_postings_tool 호출됨. Query: {query_text[:50]}..."
-    # )
+    from search.services import vector_search_job_postings
 
-    # 1. Vector DB에서 유사 공고 ID 검색
-    collection = vector_db_client.get_or_create_collection("job_postings")
-    query_result = vector_db_client.query(
-        collection=collection,
-        query_texts=[query_text],
-        n_results=n_results,
-    )
-
-    posting_ids = query_result["ids"][0]
-    if not posting_ids:
-        return json.dumps([], ensure_ascii=False)
-
-    # 2. ID를 사용하여 Postgres DB에서 전체 공고 정보 조회
-    # ChromaDB는 ID를 문자열로 저장하므로 정수형으로 변환 필요
-    int_posting_ids = [int(pid) for pid in posting_ids]
-
-    # 순서를 보장하면서 조회
-    preserved_order = Case(
-        *[When(posting_id=pk, then=pos) for pos, pk in enumerate(int_posting_ids)]
-    )
-    query_set = JobPosting.objects.filter(posting_id__in=int_posting_ids).order_by(
-        preserved_order
-    )
-
-    filtered_postings = list(
-        query_set.values(
-            "posting_id",
-            "url",
-            "company_name",
-            "position",
-            "main_tasks",
-            "requirements",
-            "preferred_points",
-            "location",
-            "district",
-            "employment_type",
-            "career_min",
-            "career_max",
-            "skills_required",
-            "skills_preferred",
-        )
-    )
-
-    # print(f"[Tool Call] {len(filtered_postings)} 건의 공고가 벡터 검색되었습니다.")
-    return json.dumps(filtered_postings, ensure_ascii=False, default=str)
+    return vector_search_job_postings(query_text, n_results)
 
 
 @tool("Hybrid Search Job Postings Tool")
@@ -81,90 +34,13 @@ def hybrid_search_job_postings_tool(
     """
     Vector DB와 Graph DB를 결합한 2단계 검색으로 정확도를 높입니다.
     1단계: Vector DB에서 의미 기반 검색 (50개)
-    2단계: Graph DB에서 스킬 기반 필터링 (20개)
+    2단계: Graph DB에서 스킬 기반 필터링 (n_results개)
+
+    Phase 2.2: search.services.SearchService 사용
     """
-    # 1단계: Vector DB에서 더 많은 후보 검색 (50개)
-    initial_candidates = 50
-    collection = vector_db_client.get_or_create_collection("job_postings")
-    query_result = vector_db_client.query(
-        collection=collection,
-        query_texts=[query_text],
-        n_results=initial_candidates,
-    )
+    from search.services import hybrid_search_job_postings
 
-    posting_ids = query_result["ids"][0]
-    if not posting_ids:
-        print("[Hybrid Search] Vector DB에서 결과를 찾지 못했습니다.")
-        return json.dumps([], ensure_ascii=False)
-
-    int_posting_ids = [int(pid) for pid in posting_ids]
-    print(
-        f"[Hybrid Search] 1단계: Vector DB에서 {len(int_posting_ids)}개 후보 검색 완료"
-    )
-
-    # 2단계: Graph DB에서 스킬 기반 필터링
-    if user_skills:
-        print(
-            f"[Hybrid Search] 2단계: Graph DB 필터링 시작 (스킬: {user_skills[:5]}...)"
-        )
-        filtered_results = graph_db_client.filter_postings_by_skills(
-            posting_ids=int_posting_ids,
-            user_skills=user_skills,
-            limit=n_results,
-        )
-
-        # 필터링 결과가 있으면 해당 순서 사용, 없으면 Vector 검색 순서 유지
-        if filtered_results:
-            int_posting_ids = [result["posting_id"] for result in filtered_results]
-            print(
-                f"[Hybrid Search] Graph DB 필터링 완료: {len(int_posting_ids)}개 매칭"
-            )
-        else:
-            # 스킬 매칭이 없으면 상위 n_results개만 사용
-            int_posting_ids = int_posting_ids[:n_results]
-            print(
-                f"[Hybrid Search] Graph DB 매칭 없음 → Vector 상위 {len(int_posting_ids)}개 사용 (Fallback)"
-            )
-    else:
-        # 스킬 정보가 없으면 Vector 검색 상위 n_results개만
-        int_posting_ids = int_posting_ids[:n_results]
-        print(
-            f"[Hybrid Search] 스킬 정보 없음 → Vector 상위 {len(int_posting_ids)}개 사용"
-        )
-
-    # 3단계: PostgreSQL에서 전체 공고 정보 조회
-    preserved_order = Case(
-        *[When(posting_id=pk, then=pos) for pos, pk in enumerate(int_posting_ids)]
-    )
-    query_set = JobPosting.objects.filter(posting_id__in=int_posting_ids).order_by(
-        preserved_order
-    )
-
-    filtered_postings = list(
-        query_set.values(
-            "posting_id",
-            "url",
-            "company_name",
-            "position",
-            "main_tasks",
-            "requirements",
-            "preferred_points",
-            "location",
-            "district",
-            "employment_type",
-            "career_min",
-            "career_max",
-            "skills_required",
-            "skills_preferred",
-        )
-    )
-
-    print(
-        f"[Hybrid Search] 3단계: PostgreSQL에서 {len(filtered_postings)}개 공고 조회 완료"
-    )
-    print(f"[Hybrid Search] 최종 반환: {len(filtered_postings)}개")
-
-    return json.dumps(filtered_postings, ensure_ascii=False, default=str)
+    return hybrid_search_job_postings(query_text, user_skills, n_results)
 
 
 @tool("Get resume tool")
@@ -173,18 +49,18 @@ def get_resume_tool(user_id: Annotated[int, "조회할 사용자의 ID"]) -> str
     try:
         resume = Resume.objects.get(user_id=user_id)
         if resume.needs_analysis():
-            # LLM 대신 직접 분석 로직 호출
-            analysis_result = _extract_resume_details(resume.content, SKILL_LIST)
-            resume.analysis_result = analysis_result
-            resume.analyzed_at = timezone.now()
-            resume.save()  # Save the updated analysis result
+            # TODO: agent 앱 deprecated - 실제 분석은 resume/tasks.py의 process_resume 사용
+            # Celery 태스크 트리거
+            from job.tasks import process_resume
 
+            process_resume.delay(user_id)
+
+            # 분석 중 상태 반환
             return json.dumps(
                 {
-                    "status": "analyzed",  # 상태를 'analyzed'로 변경
+                    "status": "analysis_scheduled",
                     "user_id": resume.user_id,
-                    "content": resume.content,
-                    "analysis_result": resume.analysis_result,
+                    "message": "Resume analysis has been scheduled. Use the API to check status.",
                     "analyzed_at": str(resume.analyzed_at),
                 },
                 ensure_ascii=False,

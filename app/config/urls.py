@@ -36,6 +36,8 @@ urlpatterns = [
     path("admin/", admin.site.urls),
     path("api/v1/", include("job.urls")),
     path("api/v1/user/", include("user.urls")),
+    path("api/v1/skills/", include("skill.urls")),  # Phase 2.1: skill app
+    path("api/v1/search/", include("search.urls")),  # Phase 2.2: search app
     path("health/", health_check, name="health_check"),
     # Spectacular
     path("api/v1/schema/", SpectacularAPIView.as_view(), name="schema"),

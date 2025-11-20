@@ -193,7 +193,7 @@ def _calculate_match_score_and_reason(
     # 2. 우대사항 매칭 (최대 30점)
     # 우대사항 텍스트에서 스킬 추출하여 비교
     if posting.skills_preferred:
-        from job.skill_extractor import extract_skills
+        from skill.services import extract_skills
 
         preferred_skills = set(extract_skills(posting.skills_preferred))
         if preferred_skills:

@@ -6,9 +6,9 @@ from celery import shared_task
 from common.graph_db import graph_db_client
 from common.vector_db import vector_db_client
 from django.utils import timezone
+from skill.services import extract_skills, extract_skills_from_job_posting
 
 from .models import JobPosting, Resume
-from .skill_extractor import extract_skills_from_job_posting
 
 
 @shared_task(bind=True, max_retries=3)
@@ -168,8 +168,7 @@ def process_resume(self, user_id: int):
             }
 
         # 3. 스킬 추출 (LLM-Free)
-        from .skill_extractor import extract_skills
-
+        # extract_skills는 이미 상단에서 import됨
         skills = extract_skills(resume.content)
 
         # 4. LLM 호출 (1회) - 경력, 강점, 경력 요약 동시 추출

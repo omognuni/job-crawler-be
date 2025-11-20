@@ -2,9 +2,7 @@ from django.urls import include, path
 from job.views import (
     JobPostingViewSet,
     JobRecommendationViewSet,
-    JobSearchView,
     RecommendationsView,
-    RelatedJobsView,
     ResumeViewSet,
 )
 from rest_framework.routers import DefaultRouter
@@ -16,12 +14,8 @@ router.register(r"recommendations", JobRecommendationViewSet, basename="recommen
 
 urlpatterns = [
     path("", include(router.urls)),
-    path("search/", JobSearchView.as_view(), name="job-search"),
-    path(
-        "related-by-skill/<str:skill_name>/",
-        RelatedJobsView.as_view(),
-        name="related-jobs-by-skill",
-    ),
+    # JobSearchView: search.urls로 이동 (Phase 2.2)
+    # RelatedJobsView: skill.urls로 이동 (Phase 2.1)
     path(
         "recommend/",
         RecommendationsView.as_view(),
