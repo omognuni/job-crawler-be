@@ -1,16 +1,33 @@
 services:
+  nginx:
+    container_name: nginx
+    image: nginx:alpine
+    ports:
+      - ${PORT}:80
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - static_volume:/static
+      - media_volume:/media
+    depends_on:
+      - app
+    restart: unless-stopped
+
   app:
     container_name: app
     image: ${PROD_IMAGE_NAME}
     user: "1000:1000"
-    ports:
-      - ${PORT}:8000
+    expose:
+      - 8000
     env_file:
       - .env.prod
     environment:
       - PYTHONPATH=/workspace
+      - USE_NGINX=true
     depends_on:
       - db
+    volumes:
+      - static_volume:/workspace/app/static
+      - media_volume:/workspace/app/media
     command: >
       sh -c "
         uv run python manage.py collectstatic --noinput --clear &&
@@ -76,3 +93,5 @@ volumes:
   chroma_data:
   neo4j_data:
   redis_data:
+  static_volume:
+  media_volume:
