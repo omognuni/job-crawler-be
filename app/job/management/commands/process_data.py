@@ -38,12 +38,18 @@ class Command(BaseCommand):
             action="store_true",
             help="Wait for all tasks to complete and show progress.",
         )
+        parser.add_argument(
+            "--reindex",
+            action="store_true",
+            help="Force re-indexing without re-analyzing (useful for model changes).",
+        )
 
     def handle(self, *args, **options):
         process_job_postings_flag = options["all"] or options["model"] == "jobposting"
         process_resumes_flag = options["all"] or options["model"] == "resume"
         batch_size = options["batch_size"]
         wait = options["wait"]
+        reindex = options["reindex"]
 
         if not process_job_postings_flag and not process_resumes_flag:
             self.stdout.write(
@@ -54,16 +60,16 @@ class Command(BaseCommand):
             return
 
         if process_job_postings_flag:
-            self.process_job_postings(batch_size, wait)
+            self.process_job_postings(batch_size, wait, reindex)
 
         if process_resumes_flag:
-            self.process_resumes(batch_size, wait)
+            self.process_resumes(batch_size, wait, reindex)
 
         self.stdout.write(
             self.style.SUCCESS("Finished submitting all tasks to Celery.")
         )
 
-    def process_job_postings(self, batch_size, wait):
+    def process_job_postings(self, batch_size, wait, reindex=False):
         """
         Process all JobPostings by submitting them to Celery queue.
         """
@@ -86,7 +92,8 @@ class Command(BaseCommand):
         for i in range(0, total, batch_size):
             batch = job_posting_ids[i : i + batch_size]
             task_group = group(
-                process_job_posting.s(posting_id) for posting_id in batch
+                process_job_posting.s(posting_id, reindex=reindex)
+                for posting_id in batch
             )
             result = task_group.apply_async()
 
@@ -111,7 +118,7 @@ class Command(BaseCommand):
             )
         )
 
-    def process_resumes(self, batch_size, wait):
+    def process_resumes(self, batch_size, wait, reindex=False):
         """
         Process all Resumes by submitting them to Celery queue.
         """
@@ -131,7 +138,9 @@ class Command(BaseCommand):
         tasks_submitted = 0
         for i in range(0, total, batch_size):
             batch = user_ids[i : i + batch_size]
-            task_group = group(process_resume.s(user_id) for user_id in batch)
+            task_group = group(
+                process_resume.s(user_id, reindex=reindex) for user_id in batch
+            )
             result = task_group.apply_async()
 
             tasks_submitted += len(batch)

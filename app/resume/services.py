@@ -210,7 +210,7 @@ class ResumeService:
             }
 
     @staticmethod
-    def process_resume_sync(user_id: int) -> Dict:
+    def process_resume_sync(user_id: int, reindex: bool = False) -> Dict:
         """
         이력서 처리 (동기 방식)
 
@@ -219,6 +219,7 @@ class ResumeService:
 
         Args:
             user_id: 사용자 ID
+            reindex: 강제 재인덱싱 여부 (True일 경우 LLM 분석 건너뛰고 임베딩만 수행)
 
         Returns:
             처리 결과 딕셔너리
@@ -232,7 +233,8 @@ class ResumeService:
                 return {"success": False, "error": error_msg}
 
             # 2. 분석 필요 여부 체크
-            if not resume.needs_analysis():
+            # reindex가 True이면 분석 필요 여부와 상관없이 진행하되, LLM 분석은 건너뜀
+            if not reindex and not resume.needs_analysis():
                 logger.info(
                     f"Resume {user_id} does not need re-analysis (hash unchanged)"
                 )
@@ -243,30 +245,46 @@ class ResumeService:
                     "reason": "No changes detected",
                 }
 
-            # 3. LLM 분석
-            analysis = ResumeService.analyze_resume_with_llm(resume.content)
+            # 3. LLM 분석 (reindex가 아니고, 분석이 필요한 경우에만 수행)
+            if not reindex:
+                analysis = ResumeService.analyze_resume_with_llm(resume.content)
 
-            # 4. Resume 업데이트
-            resume.analysis_result = {
-                "skills": analysis["skills"],
-                "career_years": analysis["career_years"],
-                "strengths": analysis["strengths"],
-            }
-            resume.experience_summary = analysis["experience_summary"]
-            resume.analyzed_at = timezone.now()
-            resume.save(
-                update_fields=[
-                    "analysis_result",
-                    "experience_summary",
-                    "analyzed_at",
-                    "content_hash",
-                ]
-            )
+                # 4. Resume 업데이트
+                resume.analysis_result = {
+                    "skills": analysis["skills"],
+                    "career_years": analysis["career_years"],
+                    "strengths": analysis["strengths"],
+                }
+                resume.experience_summary = analysis["experience_summary"]
+                resume.analyzed_at = timezone.now()
+                resume.save(
+                    update_fields=[
+                        "analysis_result",
+                        "experience_summary",
+                        "analyzed_at",
+                        "content_hash",
+                    ]
+                )
 
-            logger.info(
-                f"Analyzed resume {user_id}: {len(analysis['skills'])} skills, "
-                f"{analysis['career_years']} years"
-            )
+                logger.info(
+                    f"Analyzed resume {user_id}: {len(analysis['skills'])} skills, "
+                    f"{analysis['career_years']} years"
+                )
+            else:
+                # Reindex 모드: 기존 분석 결과 사용
+                if not resume.analysis_result or not resume.experience_summary:
+                    logger.warning(
+                        f"Resume {user_id} has no analysis result, skipping reindex optimization and running full analysis"
+                    )
+                    # 분석 결과가 없으면 reindex라도 분석 수행
+                    return ResumeService.process_resume_sync(user_id, reindex=False)
+
+                analysis = {
+                    "skills": resume.analysis_result.get("skills", []),
+                    "career_years": resume.analysis_result.get("career_years", 0),
+                    "experience_summary": resume.experience_summary,
+                }
+                logger.info(f"Re-indexing resume {user_id} (skipping LLM analysis)")
 
             # 5. ChromaDB에 임베딩
             if (

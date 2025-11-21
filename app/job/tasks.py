@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 
 @shared_task(bind=True, max_retries=3)
-def process_job_posting(self, posting_id: int):
+def process_job_posting(self, posting_id: int, reindex: bool = False):
     """
     채용 공고를 처리하는 Celery 태스크
 
@@ -19,13 +19,14 @@ def process_job_posting(self, posting_id: int):
 
     Args:
         posting_id: JobPosting의 ID
+        reindex: 강제 재인덱싱 여부
 
     Returns:
         dict: 처리 결과
     """
     try:
         # JobService에 위임
-        result = JobService.process_job_posting_sync(posting_id)
+        result = JobService.process_job_posting_sync(posting_id, reindex=reindex)
 
         if not result.get("success"):
             # 처리 실패 시 재시도

@@ -110,7 +110,7 @@ class JobService:
             return True
 
     @staticmethod
-    def process_job_posting_sync(posting_id: int) -> Dict:
+    def process_job_posting_sync(posting_id: int, reindex: bool = False) -> Dict:
         """
         채용 공고 처리 (동기 방식)
 
@@ -119,6 +119,7 @@ class JobService:
 
         Args:
             posting_id: 채용 공고 ID
+            reindex: 강제 재인덱싱 여부 (현재는 로직 차이 없음)
 
         Returns:
             처리 결과 딕셔너리
