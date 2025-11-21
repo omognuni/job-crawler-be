@@ -6,7 +6,9 @@ from django.db import models, transaction
 class Resume(models.Model):
     user_id = models.IntegerField(unique=True)
     content = models.TextField(help_text="이력서 원본 내용")
-    content_hash = models.CharField(max_length=64, help_text="이력서 내용 해시값")
+    content_hash = models.CharField(
+        max_length=64, help_text="이력서 내용 해시값", blank=True, null=True
+    )
     analysis_result = models.JSONField(
         null=True, blank=True, help_text="이력서 분석 결과 (캐시)"
     )

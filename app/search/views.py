@@ -4,6 +4,7 @@ Search Views
 검색 관련 API 뷰
 """
 
+from drf_spectacular.utils import OpenApiParameter, OpenApiTypes, extend_schema
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -20,17 +21,28 @@ class JobSearchView(APIView):
 
     permission_classes = [AllowAny]
 
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(
+                name="query",
+                description="검색 쿼리 텍스트",
+                required=True,
+                type=OpenApiTypes.STR,
+            ),
+            OpenApiParameter(
+                name="limit",
+                description="결과 수 (기본 20)",
+                required=False,
+                type=OpenApiTypes.INT,
+            ),
+        ],
+        responses={
+            200: OpenApiTypes.OBJECT,  # Or define a specific serializer for search results
+        },
+        summary="Vector Search",
+        description="Search job postings using vector similarity.",
+    )
     def get(self, request):
-        """
-        GET /api/v1/search/?query=<text>&limit=<int>
-
-        Args:
-            query: 검색 쿼리 텍스트 (필수)
-            limit: 결과 수 (선택, 기본 20)
-
-        Returns:
-            검색된 채용 공고 리스트
-        """
         query = request.query_params.get("query")
         if not query:
             return Response({"error": "Query parameter is required"}, status=400)
@@ -52,18 +64,15 @@ class HybridSearchView(APIView):
 
     permission_classes = [AllowAny]
 
+    @extend_schema(
+        request=OpenApiTypes.OBJECT,  # Or define a serializer for the request body
+        responses={
+            200: OpenApiTypes.OBJECT,
+        },
+        summary="Hybrid Search",
+        description="Search job postings using both vector similarity and skill matching.",
+    )
     def post(self, request):
-        """
-        POST /api/v1/search/hybrid/
-
-        Body:
-            query: 검색 쿼리 텍스트
-            skills: 사용자 보유 스킬 리스트
-            limit: 결과 수 (선택, 기본 20)
-
-        Returns:
-            스킬 매칭된 채용 공고 리스트
-        """
         query = request.data.get("query")
         skills = request.data.get("skills", [])
         limit = int(request.data.get("limit", 20))

@@ -5,6 +5,7 @@ Skill Views
 """
 
 from common.graph_db import graph_db_client
+from drf_spectacular.utils import extend_schema
 from job.models import JobPosting
 from job.serializers import JobPostingSerializer
 from rest_framework.permissions import AllowAny
@@ -21,16 +22,12 @@ class RelatedJobsBySkillView(APIView):
 
     permission_classes = [AllowAny]
 
+    @extend_schema(
+        responses=JobPostingSerializer(many=True),
+        summary="Get Related Jobs by Skill",
+        description="Get job postings related to a specific skill using Graph DB.",
+    )
     def get(self, request, skill_name: str):
-        """
-        GET /api/v1/skills/related/<skill_name>/
-
-        Args:
-            skill_name: 검색할 스킬 이름 (예: "Python", "Django")
-
-        Returns:
-            해당 스킬을 요구하는 채용 공고 리스트
-        """
         # Neo4j에서 스킬 관련 공고 ID 조회
         posting_ids = graph_db_client.get_jobs_related_to_skill(skill_name)
 
