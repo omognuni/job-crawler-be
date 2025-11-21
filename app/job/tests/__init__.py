@@ -1,0 +1,3 @@
+"""
+Job app tests
+"""

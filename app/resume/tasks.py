@@ -1,31 +1,33 @@
 """
-Celery 태스크: 채용 공고 처리
+Resume Celery Tasks
+
+이력서 비동기 처리 태스크
 """
 
 import logging
 
 from celery import shared_task
-from job.services import JobService
+from resume.services import ResumeService
 
 logger = logging.getLogger(__name__)
 
 
 @shared_task(bind=True, max_retries=3)
-def process_job_posting(self, posting_id: int):
+def process_resume(self, user_id: int):
     """
-    채용 공고를 처리하는 Celery 태스크
+    이력서를 처리하는 Celery 태스크
 
-    JobService를 통해 스킬 추출, 임베딩 생성, Graph DB 저장을 수행합니다.
+    ResumeService를 통해 분석, 임베딩 생성을 수행합니다.
 
     Args:
-        posting_id: JobPosting의 ID
+        user_id: User ID
 
     Returns:
         dict: 처리 결과
     """
     try:
-        # JobService에 위임
-        result = JobService.process_job_posting_sync(posting_id)
+        # ResumeService에 위임
+        result = ResumeService.process_resume_sync(user_id)
 
         if not result.get("success"):
             # 처리 실패 시 재시도
@@ -35,12 +37,12 @@ def process_job_posting(self, posting_id: int):
         return result
 
     except Exception as e:
-        error_msg = f"Error processing job posting {posting_id}: {str(e)}"
+        error_msg = f"Error processing resume {user_id}: {str(e)}"
         logger.error(error_msg, exc_info=True)
 
         # 재시도
         try:
-            raise self.retry(exc=e, countdown=60)  # 60초 후 재시도
+            raise self.retry(exc=e, countdown=60)
         except self.MaxRetriesExceededError:
-            logger.error(f"Max retries exceeded for posting {posting_id}")
+            logger.error(f"Max retries exceeded for resume {user_id}")
             return {"success": False, "error": error_msg}

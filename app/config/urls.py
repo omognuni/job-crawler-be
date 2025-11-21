@@ -33,11 +33,18 @@ def health_check(request):
 
 
 urlpatterns = [
+    # Admin
     path("admin/", admin.site.urls),
-    path("api/v1/", include("job.urls")),
-    path("api/v1/user/", include("user.urls")),
+    # API v1 Endpoints
+    path("api/v1/jobs/", include("job.urls")),
+    path("api/v1/users/", include("user.urls")),
+    path("api/v1/skills/", include("skill.urls")),
+    path("api/v1/search/", include("search.urls")),
+    path("api/v1/resumes/", include("resume.urls")),
+    path("api/v1/recommendations/", include("recommendation.urls")),
+    # Health Check
     path("health/", health_check, name="health_check"),
-    # Spectacular
+    # API Documentation (Spectacular)
     path("api/v1/schema/", SpectacularAPIView.as_view(), name="schema"),
     path(
         "api/v1/schema/swagger-ui/",

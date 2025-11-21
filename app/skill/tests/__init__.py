@@ -1,0 +1,3 @@
+"""
+Skill app tests
+"""

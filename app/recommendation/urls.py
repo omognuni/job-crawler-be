@@ -1,9 +1,9 @@
 from django.urls import include, path
-from job.views import JobPostingViewSet
+from recommendation.views import JobRecommendationViewSet
 from rest_framework.routers import DefaultRouter
 
 router = DefaultRouter()
-router.register(r"", JobPostingViewSet, basename="job")
+router.register(r"", JobRecommendationViewSet, basename="recommendation")
 
 urlpatterns = [
     path("", include(router.urls)),
