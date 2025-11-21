@@ -249,6 +249,10 @@ SESSION_COOKIE_SAMESITE = "Strict"
 CSRF_COOKIE_HTTPONLY = True
 CSRF_COOKIE_SAMESITE = "Strict"
 
+CSRF_TRUSTED_ORIGINS = os.getenv(
+    "CSRF_TRUSTED_ORIGINS", "http://localhost:8000,http://127.0.0.1:8000"
+).split(",")
+
 # if not DEBUG:
 #     # Production security settings
 #     SECURE_SSL_REDIRECT = True

@@ -130,6 +130,7 @@ jobs:
             GOOGLE_API_KEY=${{ secrets.GOOGLE_API_KEY }}
             PROD_IMAGE_NAME=${PROD_IMAGE}
             SLACK_WEBHOOK_URL=${{ secrets.SLACK_WEBHOOK_URL }}
+            CSRF_TRUSTED_ORIGINS=${{ secrets.CSRF_TRUSTED_ORIGINS }}
             EOF
 
             # 6. Login to container registry
@@ -157,7 +158,7 @@ jobs:
           port: ${{ secrets.SSH_PORT || 22 }}
           script: |
             echo "🔍 Performing health check..."
-            sleep 20 # Wait for services to start
+            sleep 60 # Wait for services to start
 
             PORT_TO_CHECK=${{ secrets.PORT || 8000 }}
 
