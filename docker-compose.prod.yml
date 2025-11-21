@@ -25,6 +25,7 @@ services:
       - USE_NGINX=true
     depends_on:
       - db
+      - init
     volumes:
       - static_volume:/workspace/app/static
       - media_volume:/workspace/app/media
@@ -34,6 +35,13 @@ services:
         uv run python manage.py migrate &&
         uv run gunicorn app.config.wsgi:application --bind 0.0.0.0:8000 --workers 2 --threads 4 --worker-class gthread --timeout 120 --keep-alive 5
       "
+
+  init:
+    image: alpine:latest
+    command: sh -c "chown -R 1000:1000 /workspace/app/static /workspace/app/media"
+    volumes:
+      - static_volume:/workspace/app/static
+      - media_volume:/workspace/app/media
 
   db:
     container_name: db
