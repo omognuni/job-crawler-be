@@ -16,6 +16,9 @@ from resume.services import ResumeService
 logger = logging.getLogger(__name__)
 
 
+from rest_framework.permissions import IsAuthenticated
+
+
 class ResumeViewSet(ModelViewSet):
     """
     이력서 ViewSet (Thin Controller)
@@ -26,7 +29,13 @@ class ResumeViewSet(ModelViewSet):
 
     queryset = Resume.objects.all()
     serializer_class = ResumeSerializer
-    lookup_field = "user_id"
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        """
+        요청을 보낸 사용자의 이력서만 조회
+        """
+        return Resume.objects.filter(user_id=self.request.user.id)
 
     def list(self, request, *args, **kwargs):
         """
@@ -34,41 +43,17 @@ class ResumeViewSet(ModelViewSet):
 
         GET /api/v1/resumes/
         """
-        try:
-            resumes = ResumeService.get_all_resumes()
-            serializer = self.get_serializer(resumes, many=True)
-            return Response(serializer.data)
-        except Exception as e:
-            logger.error(f"Failed to list resumes: {str(e)}", exc_info=True)
-            return Response(
-                {"error": "Failed to retrieve resumes"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+        # get_queryset()을 통해 현재 사용자의 이력서만 반환
+        return super().list(request, *args, **kwargs)
 
-    def retrieve(self, request, user_id=None, *args, **kwargs):
+    def retrieve(self, request, *args, **kwargs):
         """
         이력서 상세 조회
 
-        GET /api/v1/resumes/<user_id>/
+        GET /api/v1/resumes/<resume_id>/
         """
-        try:
-            resume = ResumeService.get_resume(int(user_id))
-            if not resume:
-                return Response(
-                    {"error": "Resume not found"},
-                    status=status.HTTP_404_NOT_FOUND,
-                )
-
-            serializer = self.get_serializer(resume)
-            return Response(serializer.data)
-        except Exception as e:
-            logger.error(
-                f"Failed to retrieve resume {user_id}: {str(e)}", exc_info=True
-            )
-            return Response(
-                {"error": "Failed to retrieve resume"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+        # get_queryset() 범위 내에서 pk로 조회
+        return super().retrieve(request, *args, **kwargs)
 
     def create(self, request, *args, **kwargs):
         """
@@ -77,7 +62,11 @@ class ResumeViewSet(ModelViewSet):
         POST /api/v1/resumes/
         """
         try:
-            serializer = self.get_serializer(data=request.data)
+            # user_id 자동 주입
+            data = request.data.copy()
+            data["user_id"] = request.user.id
+
+            serializer = self.get_serializer(data=data)
             serializer.is_valid(raise_exception=True)
 
             # Service를 통해 생성 (save() 메서드가 자동으로 Celery 작업 호출)
@@ -92,18 +81,18 @@ class ResumeViewSet(ModelViewSet):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
-    def update(self, request, user_id=None, *args, **kwargs):
+    def update(self, request, pk=None, *args, **kwargs):
         """
         이력서 수정 (전체)
 
-        PUT /api/v1/resumes/<user_id>/
+        PUT /api/v1/resumes/<resume_id>/
         """
         try:
             serializer = self.get_serializer(data=request.data)
             serializer.is_valid(raise_exception=True)
 
             resume = ResumeService.update_resume(
-                int(user_id), serializer.validated_data
+                int(pk), request.user.id, serializer.validated_data
             )
             if not resume:
                 return Response(
@@ -114,24 +103,24 @@ class ResumeViewSet(ModelViewSet):
             response_serializer = self.get_serializer(resume)
             return Response(response_serializer.data)
         except Exception as e:
-            logger.error(f"Failed to update resume {user_id}: {str(e)}", exc_info=True)
+            logger.error(f"Failed to update resume {pk}: {str(e)}", exc_info=True)
             return Response(
                 {"error": "Failed to update resume"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
-    def partial_update(self, request, user_id=None, *args, **kwargs):
+    def partial_update(self, request, pk=None, *args, **kwargs):
         """
         이력서 수정 (부분)
 
-        PATCH /api/v1/resumes/<user_id>/
+        PATCH /api/v1/resumes/<resume_id>/
         """
         try:
             serializer = self.get_serializer(data=request.data, partial=True)
             serializer.is_valid(raise_exception=True)
 
             resume = ResumeService.update_resume(
-                int(user_id), serializer.validated_data
+                int(pk), request.user.id, serializer.validated_data
             )
             if not resume:
                 return Response(
@@ -143,7 +132,7 @@ class ResumeViewSet(ModelViewSet):
             return Response(response_serializer.data)
         except Exception as e:
             logger.error(
-                f"Failed to partially update resume {user_id}: {str(e)}",
+                f"Failed to partially update resume {pk}: {str(e)}",
                 exc_info=True,
             )
             return Response(
@@ -151,14 +140,14 @@ class ResumeViewSet(ModelViewSet):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
-    def destroy(self, request, user_id=None, *args, **kwargs):
+    def destroy(self, request, pk=None, *args, **kwargs):
         """
         이력서 삭제
 
-        DELETE /api/v1/resumes/<user_id>/
+        DELETE /api/v1/resumes/<resume_id>/
         """
         try:
-            success = ResumeService.delete_resume(int(user_id))
+            success = ResumeService.delete_resume(int(pk), request.user.id)
             if not success:
                 return Response(
                     {"error": "Resume not found"},
@@ -167,7 +156,7 @@ class ResumeViewSet(ModelViewSet):
 
             return Response(status=status.HTTP_204_NO_CONTENT)
         except Exception as e:
-            logger.error(f"Failed to delete resume {user_id}: {str(e)}", exc_info=True)
+            logger.error(f"Failed to delete resume {pk}: {str(e)}", exc_info=True)
             return Response(
                 {"error": "Failed to delete resume"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,

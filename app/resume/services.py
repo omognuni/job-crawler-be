@@ -29,7 +29,7 @@ class ResumeService:
     @staticmethod
     def get_resume(user_id: int) -> Optional[Resume]:
         """
-        이력서 조회
+        이력서 조회 (User ID 기준)
 
         Args:
             user_id: 사용자 ID
@@ -38,9 +38,27 @@ class ResumeService:
             Resume 객체 또는 None
         """
         try:
+            # TODO: 1:N 관계로 변경 시 로직 수정 필요 (현재는 1:1 가정)
             return Resume.objects.get(user_id=user_id)
         except Resume.DoesNotExist:
             logger.warning(f"Resume for user {user_id} not found")
+            return None
+
+    @staticmethod
+    def get_resume_by_id(resume_id: int, user_id: int) -> Optional[Resume]:
+        """
+        이력서 조회 (Resume ID 및 User ID 기준)
+
+        Args:
+            resume_id: 이력서 ID
+            user_id: 사용자 ID
+
+        Returns:
+            Resume 객체 또는 None
+        """
+        try:
+            return Resume.objects.get(id=resume_id, user_id=user_id)
+        except Resume.DoesNotExist:
             return None
 
     @staticmethod
@@ -66,22 +84,23 @@ class ResumeService:
         """
         with transaction.atomic():
             resume = Resume.objects.create(**data)
-            logger.info(f"Created Resume for user {resume.user_id}")
+            logger.info(f"Created Resume {resume.id} for user {resume.user_id}")
             return resume
 
     @staticmethod
-    def update_resume(user_id: int, data: Dict) -> Optional[Resume]:
+    def update_resume(resume_id: int, user_id: int, data: Dict) -> Optional[Resume]:
         """
         이력서 업데이트
 
         Args:
+            resume_id: 이력서 ID
             user_id: 사용자 ID
             data: 업데이트할 데이터 딕셔너리
 
         Returns:
             업데이트된 Resume 객체 또는 None
         """
-        resume = ResumeService.get_resume(user_id)
+        resume = ResumeService.get_resume_by_id(resume_id, user_id)
         if not resume:
             return None
 
@@ -89,27 +108,28 @@ class ResumeService:
             for key, value in data.items():
                 setattr(resume, key, value)
             resume.save()
-            logger.info(f"Updated Resume for user {user_id}")
+            logger.info(f"Updated Resume {resume_id} for user {user_id}")
             return resume
 
     @staticmethod
-    def delete_resume(user_id: int) -> bool:
+    def delete_resume(resume_id: int, user_id: int) -> bool:
         """
         이력서 삭제
 
         Args:
+            resume_id: 이력서 ID
             user_id: 사용자 ID
 
         Returns:
             삭제 성공 여부
         """
-        resume = ResumeService.get_resume(user_id)
+        resume = ResumeService.get_resume_by_id(resume_id, user_id)
         if not resume:
             return False
 
         with transaction.atomic():
             resume.delete()
-            logger.info(f"Deleted Resume for user {user_id}")
+            logger.info(f"Deleted Resume {resume_id} for user {user_id}")
             return True
 
     @staticmethod

@@ -27,12 +27,12 @@ class RecommendationService:
     """
 
     @staticmethod
-    def get_recommendations(user_id: int, limit: int = 10) -> List[Dict]:
+    def get_recommendations(resume_id: int, limit: int = 10) -> List[Dict]:
         """
         사용자에게 적합한 채용 공고 추천
 
         Args:
-            user_id: 사용자 ID
+            resume_id: 이력서 ID
             limit: 반환할 추천 개수 (기본 10개)
 
         Returns:
@@ -40,12 +40,15 @@ class RecommendationService:
         """
         try:
             # 1. Resume에서 스킬 및 경력 정보 추출
-            resume = Resume.objects.get(user_id=user_id)
+            resume = Resume.objects.get(id=resume_id)
+            user_id = resume.user_id
             user_skills = set(resume.analysis_result.get("skills", []))
             user_career_years = resume.analysis_result.get("career_years", 0)
 
             if not user_skills:
-                logger.warning(f"User {user_id} has no skills in analysis_result")
+                logger.warning(
+                    f"Resume {resume_id} (User {user_id}) has no skills in analysis_result"
+                )
                 return []
 
             # 2. ChromaDB에서 벡터 유사도 기반 후보 조회 (50개)
@@ -54,7 +57,7 @@ class RecommendationService:
                 "job_postings"
             )
 
-            # 사용자 이력서 벡터 조회
+            # 사용자 이력서 벡터 조회 (Vector DB ID는 user_id 사용)
             resume_vector = resumes_collection.get(
                 ids=[str(user_id)], include=["embeddings"]
             )
@@ -123,11 +126,11 @@ class RecommendationService:
             return recommendations[:limit]
 
         except Resume.DoesNotExist:
-            logger.error(f"Resume not found for user {user_id}")
+            logger.error(f"Resume {resume_id} not found")
             return []
         except Exception as e:
             logger.error(
-                f"Error generating recommendations for user {user_id}: {e}",
+                f"Error generating recommendations for resume {resume_id}: {e}",
                 exc_info=True,
             )
             return []
@@ -345,13 +348,13 @@ class RecommendationService:
 
 
 # Backward compatibility: job/recommender.py 호환용
-def get_recommendations(user_id: int, limit: int = 10) -> List[Dict]:
+def get_recommendations(resume_id: int, limit: int = 10) -> List[Dict]:
     """
     [Backward Compatibility] job/recommender.py 호환용
 
     RecommendationService.get_recommendations()를 호출합니다.
     """
-    return RecommendationService.get_recommendations(user_id, limit)
+    return RecommendationService.get_recommendations(resume_id, limit)
 
 
 def get_skill_statistics(skill_name: str) -> Dict:

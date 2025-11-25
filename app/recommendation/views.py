@@ -151,15 +151,15 @@ class JobRecommendationViewSet(ModelViewSet):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
-    @action(detail=False, methods=["get"], url_path="for-user/(?P<user_id>[0-9]+)")
-    def for_user(self, request, user_id=None):
+    @action(detail=False, methods=["get"], url_path="for-resume/(?P<resume_id>[0-9]+)")
+    def for_resume(self, request, resume_id=None):
         """
-        특정 사용자를 위한 실시간 추천 생성
+        특정 이력서를 위한 실시간 추천 생성
 
-        GET /api/v1/recommendations/for-user/<user_id>/?limit=10
+        GET /api/v1/recommendations/for-resume/<resume_id>/?limit=10
 
         Args:
-            user_id: 사용자 ID (URL 파라미터)
+            resume_id: 이력서 ID (URL 파라미터)
             limit: 반환할 추천 개수 (쿼리 파라미터, 기본값 10)
 
         Returns:
@@ -168,30 +168,30 @@ class JobRecommendationViewSet(ModelViewSet):
         start_time = time.time()
 
         try:
-            user_id = int(user_id)
+            resume_id = int(resume_id)
             limit = int(request.query_params.get("limit", 10))
         except ValueError:
             return Response(
-                {"error": "user_id and limit must be integers"},
+                {"error": "resume_id and limit must be integers"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
         try:
             # 실시간 추천 생성
             recommendations = RecommendationService.get_recommendations(
-                user_id, limit=limit
+                resume_id, limit=limit
             )
 
             # 응답 시간 로깅
             elapsed_time = time.time() - start_time
             logger.info(
-                f"Generated {len(recommendations)} recommendations for user {user_id} "
+                f"Generated {len(recommendations)} recommendations for resume {resume_id} "
                 f"in {elapsed_time:.3f} seconds"
             )
 
             return Response(
                 {
-                    "user_id": user_id,
+                    "resume_id": resume_id,
                     "count": len(recommendations),
                     "recommendations": recommendations,
                     "response_time_seconds": round(elapsed_time, 3),
@@ -199,7 +199,7 @@ class JobRecommendationViewSet(ModelViewSet):
             )
         except Exception as e:
             logger.error(
-                f"Failed to generate recommendations for user {user_id}: {str(e)}",
+                f"Failed to generate recommendations for resume {resume_id}: {str(e)}",
                 exc_info=True,
             )
             return Response(

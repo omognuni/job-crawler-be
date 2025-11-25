@@ -59,7 +59,7 @@ def main():
             try:
                 # AI-Free 추천 엔진 사용
                 recommendations_data = RecommendationService.get_recommendations(
-                    user_id=resume_obj.user_id, limit=20
+                    resume_id=resume_obj.id, limit=20
                 )
 
                 # 추천 결과 검증
