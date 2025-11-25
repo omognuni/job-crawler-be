@@ -104,7 +104,6 @@ class RecommendationService:
                             posting, user_skills, user_career_years
                         )
                     )
-
                     recommendations.append(
                         {
                             "posting_id": posting_id,
@@ -122,7 +121,21 @@ class RecommendationService:
                     continue
 
             # 5. match_score 기준 정렬 및 상위 limit개 반환
+            recommendation_obj_list = []
             recommendations.sort(key=lambda x: x["match_score"], reverse=True)
+            for idx, recommendation in enumerate(recommendations[:limit]):
+                recommendation_obj_list.append(
+                    JobRecommendation(
+                        user_id=user_id,
+                        job_posting=JobPosting.objects.get(
+                            posting_id=recommendation["posting_id"]
+                        ),
+                        rank=idx + 1,
+                        match_score=recommendation["match_score"],
+                        match_reason=recommendation["match_reason"],
+                    )
+                )
+            JobRecommendation.objects.bulk_create(recommendation_obj_list)
             return recommendations[:limit]
 
         except Resume.DoesNotExist:

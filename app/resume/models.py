@@ -44,12 +44,11 @@ class Resume(models.Model):
 
     def needs_analysis(self) -> bool:
         """이력서 분석이 필요한지 확인"""
-        current_hash = self.calculate_hash()
-        return (
-            self.content_hash != current_hash
-            or self.analysis_result is None
-            or self.analyzed_at is None
-        )
+        if self.analysis_result is None or self.analyzed_at is None:
+            return True
+
+        # 마지막 분석 시간보다 수정 시간이 더 최신이면 분석 필요
+        return self.updated_at > self.analyzed_at
 
     def save(self, *args, **kwargs):
         """
