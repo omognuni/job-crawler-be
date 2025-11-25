@@ -87,7 +87,7 @@ jobs:
 
       - name: Deploy to SSH Server
         if: github.event_name == 'push' || github.event.inputs.deployment_target == 'ssh-server'
-        uses: appleboy/ssh-action@v1.0.3
+        uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USERNAME }}
@@ -162,7 +162,7 @@ jobs:
             echo "✅ Deployment completed successfully"
       - name: Health check (SSH Server)
         if: github.event_name == 'push' || github.event.inputs.deployment_target == 'ssh-server'
-        uses: appleboy/ssh-action@v1.0.3
+        uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USERNAME }}
