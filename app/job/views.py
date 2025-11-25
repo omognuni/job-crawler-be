@@ -7,9 +7,11 @@ Job Posting Views
 import logging
 
 from job.models import JobPosting
+from job.permissions import HasSimpleSecretKey
 from job.serializers import JobPostingSerializer
 from job.services import JobService
 from rest_framework import status
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.viewsets import GenericViewSet
 
@@ -26,6 +28,7 @@ class JobPostingViewSet(GenericViewSet):
 
     queryset = JobPosting.objects.all()
     serializer_class = JobPostingSerializer
+    permission_classes = [HasSimpleSecretKey | IsAuthenticated]
 
     def list(self, request, *args, **kwargs):
         """

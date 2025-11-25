@@ -9,8 +9,9 @@ os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
 django.setup()
 
 from django.db import transaction
-from job.models import JobRecommendation, Resume
-from job.recommender import get_recommendations
+from recommendation.models import JobRecommendation
+from recommendation.services import RecommendationService
+from resume.models import Resume
 
 
 def send_slack_message(message_text: str) -> bool:
@@ -57,7 +58,7 @@ def main():
 
             try:
                 # AI-Free 추천 엔진 사용
-                recommendations_data = get_recommendations(
+                recommendations_data = RecommendationService.get_recommendations(
                     user_id=resume_obj.user_id, limit=20
                 )
 
