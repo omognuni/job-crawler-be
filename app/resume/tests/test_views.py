@@ -33,7 +33,8 @@ class TestResumeViewSet:
         """이력서 목록 조회"""
         # Given
         Resume.objects.create(
-            user_id=1,
+            user=self.user,
+            title="My Resume",
             content="Backend Developer with Python experience",
         )
 
@@ -43,28 +44,30 @@ class TestResumeViewSet:
         # Then
         assert response.status_code == status.HTTP_200_OK
         assert len(response.data) >= 1
+        assert response.data[0]["title"] == "My Resume"
 
     def test_retrieve_resume(self):
         """이력서 상세 조회"""
         # Given
         resume = Resume.objects.create(
-            user_id=2,
+            user=self.user,
             content="Frontend Developer with React experience",
         )
 
         # When
-        response = self.client.get(f"/api/v1/resumes/{resume.user_id}/")
+        response = self.client.get(f"/api/v1/resumes/{resume.id}/")
 
         # Then
         assert response.status_code == status.HTTP_200_OK
-        assert response.data["user_id"] == 2
+        assert response.data["user_id"] == self.user.id
 
     def test_create_resume(self):
         """이력서 생성"""
         # Given
         data = {
-            "user_id": 3,
+            "title": "New Resume",
             "content": "Data Engineer with Spark experience",
+            "is_primary": True,
         }
 
         # When
@@ -72,13 +75,14 @@ class TestResumeViewSet:
 
         # Then
         assert response.status_code == status.HTTP_201_CREATED
-        assert Resume.objects.filter(user_id=3).exists()
+        assert Resume.objects.filter(user=self.user).exists()
+        assert Resume.objects.get(user=self.user).is_primary is True
 
     def test_update_resume(self):
         """이력서 수정"""
         # Given
         resume = Resume.objects.create(
-            user_id=4,
+            user=self.user,
             content="Old content",
         )
 
@@ -86,7 +90,7 @@ class TestResumeViewSet:
 
         # When
         response = self.client.patch(
-            f"/api/v1/resumes/{resume.user_id}/", data, format="json"
+            f"/api/v1/resumes/{resume.id}/", data, format="json"
         )
 
         # Then
@@ -98,13 +102,13 @@ class TestResumeViewSet:
         """이력서 삭제"""
         # Given
         resume = Resume.objects.create(
-            user_id=5,
+            user=self.user,
             content="Content to delete",
         )
 
         # When
-        response = self.client.delete(f"/api/v1/resumes/{resume.user_id}/")
+        response = self.client.delete(f"/api/v1/resumes/{resume.id}/")
 
         # Then
         assert response.status_code == status.HTTP_204_NO_CONTENT
-        assert not Resume.objects.filter(user_id=5).exists()
+        assert not Resume.objects.filter(id=resume.id).exists()

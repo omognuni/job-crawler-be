@@ -7,8 +7,11 @@ Tests for ResumeService
 from unittest.mock import MagicMock, patch
 
 import pytest
+from django.contrib.auth import get_user_model
 from resume.models import Resume
 from resume.services import ResumeService
+
+User = get_user_model()
 
 
 @pytest.mark.django_db
@@ -18,17 +21,20 @@ class TestResumeService:
     def test_get_resume_success(self):
         """이력서 조회 성공"""
         # Given
+        user = User.objects.create_user(username="testuser1", password="password")
         resume = Resume.objects.create(
-            user_id=1,
+            user=user,
+            title="My Resume",
             content="Backend Developer with 5 years of experience in Python and Django.",
         )
 
         # When
-        result = ResumeService.get_resume(1)
+        result = ResumeService.get_resume(user.id)
 
         # Then
         assert result is not None
-        assert result.user_id == 1
+        assert result.user_id == user.id
+        assert result.id == resume.id
 
     def test_get_resume_not_found(self):
         """존재하지 않는 이력서 조회"""
@@ -41,8 +47,10 @@ class TestResumeService:
     def test_create_resume(self):
         """이력서 생성"""
         # Given
+        user = User.objects.create_user(username="testuser2", password="password")
         data = {
-            "user_id": 2,
+            "user": user,
+            "title": "New Resume",
             "content": "Frontend Developer with React experience.",
         }
 
@@ -50,19 +58,22 @@ class TestResumeService:
         resume = ResumeService.create_resume(data)
 
         # Then
-        assert resume.user_id == 2
-        assert Resume.objects.filter(user_id=2).exists()
+        assert resume.user_id == user.id
+        assert Resume.objects.filter(user=user).exists()
 
     def test_update_resume(self):
         """이력서 수정"""
         # Given
+        user = User.objects.create_user(username="testuser3", password="password")
         resume = Resume.objects.create(
-            user_id=3,
+            user=user,
             content="Old content",
         )
 
         # When
-        updated = ResumeService.update_resume(3, {"content": "New content"})
+        updated = ResumeService.update_resume(
+            resume.id, user.id, {"content": "New content"}
+        )
 
         # Then
         assert updated is not None
@@ -71,17 +82,18 @@ class TestResumeService:
     def test_delete_resume(self):
         """이력서 삭제"""
         # Given
+        user = User.objects.create_user(username="testuser4", password="password")
         resume = Resume.objects.create(
-            user_id=4,
+            user=user,
             content="Content to delete",
         )
 
         # When
-        result = ResumeService.delete_resume(4)
+        result = ResumeService.delete_resume(resume.id, user.id)
 
         # Then
         assert result is True
-        assert not Resume.objects.filter(user_id=4).exists()
+        assert not Resume.objects.filter(id=resume.id).exists()
 
     @patch("resume.services.os.getenv")
     @patch("resume.services.SkillExtractionService")
@@ -109,8 +121,9 @@ class TestResumeService:
     ):
         """이력서 처리 (동기) 성공"""
         # Given
+        user = User.objects.create_user(username="testuser5", password="password")
         resume = Resume.objects.create(
-            user_id=5,
+            user=user,
             content="Backend Developer with 5 years in Python",
         )
 
@@ -122,11 +135,12 @@ class TestResumeService:
         mock_vector_db.get_or_create_collection.return_value = mock_collection
 
         # When
-        result = ResumeService.process_resume_sync(5)
+        result = ResumeService.process_resume_sync(resume.id)
 
         # Then
         assert result["success"] is True
-        assert result["user_id"] == 5
+        assert result["resume_id"] == resume.id
+        assert result["user_id"] == user.id
         assert result["skills_count"] == 2
 
         # Verify DB was updated

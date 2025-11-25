@@ -1,10 +1,21 @@
 import hashlib
 
+from django.conf import settings
 from django.db import models, transaction
 
 
 class Resume(models.Model):
-    user_id = models.IntegerField(unique=True)
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="resumes",
+    )
+    title = models.CharField(
+        max_length=100, default="내 이력서", help_text="이력서 제목"
+    )
+    is_primary = models.BooleanField(
+        default=False, help_text="대표 이력서 여부 (추천 대상)"
+    )
     content = models.TextField(help_text="이력서 원본 내용")
     content_hash = models.CharField(
         max_length=64, help_text="이력서 내용 해시값", blank=True, null=True
@@ -25,7 +36,7 @@ class Resume(models.Model):
         db_table = "agent_resume"
 
     def __str__(self):
-        return f"Resume for user {self.user_id}"
+        return f"Resume {self.id} ({self.title}) for user {self.user_id}"
 
     def calculate_hash(self) -> str:
         """이력서 내용의 해시값 계산"""
@@ -44,6 +55,12 @@ class Resume(models.Model):
         """
         저장 시 해시값 자동 갱신 및 비동기 처리 태스크 호출
         """
+        # 대표 이력서 설정 시 다른 이력서 해제
+        if self.is_primary:
+            Resume.objects.filter(user=self.user, is_primary=True).exclude(
+                id=self.id
+            ).update(is_primary=False)
+
         # 해시값 계산
         old_hash = self.content_hash
         self.content_hash = self.calculate_hash()
@@ -66,4 +83,4 @@ class Resume(models.Model):
         """비동기 처리 태스크 스케줄링"""
         from .tasks import process_resume
 
-        process_resume.delay(self.user_id)
+        process_resume.delay(self.id)

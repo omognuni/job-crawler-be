@@ -57,9 +57,9 @@ class RecommendationService:
                 "job_postings"
             )
 
-            # 사용자 이력서 벡터 조회 (Vector DB ID는 user_id 사용)
+            # 사용자 이력서 벡터 조회 (Vector DB ID는 resume_id 사용)
             resume_vector = resumes_collection.get(
-                ids=[str(user_id)], include=["embeddings"]
+                ids=[str(resume_id)], include=["embeddings"]
             )
 
             # 임베딩 검증 (numpy 배열 대응)

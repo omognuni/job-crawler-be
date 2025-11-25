@@ -43,7 +43,8 @@ def main():
         if not settings.SLACK_WEBHOOK_URL:
             print("[경고] SLACK_WEBHOOK_URL이 설정되지 않았습니다.")
 
-        resume_objs = Resume.objects.all()
+        # 대표 이력서(is_primary=True)만 조회
+        resume_objs = Resume.objects.filter(is_primary=True)
 
         if not resume_objs.exists():
             message = "⚠️ 분석할 이력서가 없습니다."
@@ -53,7 +54,9 @@ def main():
 
         for resume_obj in resume_objs:
             print(f"\n{'='*60}")
-            print(f"[시작] User {resume_obj.user_id}의 채용 공고 추천 시작")
+            print(
+                f"[시작] User {resume_obj.user_id} (Resume {resume_obj.id})의 채용 공고 추천 시작"
+            )
             print(f"{'='*60}")
 
             try:

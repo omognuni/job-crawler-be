@@ -30,6 +30,7 @@ class ResumeService:
     def get_resume(user_id: int) -> Optional[Resume]:
         """
         이력서 조회 (User ID 기준)
+        1:N 관계이므로 가장 최근에 수정된 이력서를 반환합니다.
 
         Args:
             user_id: 사용자 ID
@@ -38,10 +39,11 @@ class ResumeService:
             Resume 객체 또는 None
         """
         try:
-            # TODO: 1:N 관계로 변경 시 로직 수정 필요 (현재는 1:1 가정)
-            return Resume.objects.get(user_id=user_id)
-        except Resume.DoesNotExist:
-            logger.warning(f"Resume for user {user_id} not found")
+            return (
+                Resume.objects.filter(user_id=user_id).order_by("-updated_at").first()
+            )
+        except Exception as e:
+            logger.warning(f"Error fetching resume for user {user_id}: {e}")
             return None
 
     @staticmethod
@@ -230,7 +232,7 @@ class ResumeService:
             }
 
     @staticmethod
-    def process_resume_sync(user_id: int, reindex: bool = False) -> Dict:
+    def process_resume_sync(resume_id: int, reindex: bool = False) -> Dict:
         """
         이력서 처리 (동기 방식)
 
@@ -238,7 +240,7 @@ class ResumeService:
         Celery 작업에서 호출되거나, 테스트/관리 명령에서 직접 호출됩니다.
 
         Args:
-            user_id: 사용자 ID
+            resume_id: 이력서 ID (기존 user_id에서 변경됨)
             reindex: 강제 재인덱싱 여부 (True일 경우 LLM 분석 건너뛰고 임베딩만 수행)
 
         Returns:
@@ -246,20 +248,24 @@ class ResumeService:
         """
         try:
             # 1. Resume 조회
-            resume = ResumeService.get_resume(user_id)
-            if not resume:
-                error_msg = f"Resume for user {user_id} not found"
+            try:
+                resume = Resume.objects.get(id=resume_id)
+            except Resume.DoesNotExist:
+                error_msg = f"Resume {resume_id} not found"
                 logger.error(error_msg)
                 return {"success": False, "error": error_msg}
+
+            user_id = resume.user_id
 
             # 2. 분석 필요 여부 체크
             # reindex가 True이면 분석 필요 여부와 상관없이 진행하되, LLM 분석은 건너뜀
             if not reindex and not resume.needs_analysis():
                 logger.info(
-                    f"Resume {user_id} does not need re-analysis (hash unchanged)"
+                    f"Resume {resume_id} does not need re-analysis (hash unchanged)"
                 )
                 return {
                     "success": True,
+                    "resume_id": resume_id,
                     "user_id": user_id,
                     "skipped": True,
                     "reason": "No changes detected",
@@ -287,24 +293,24 @@ class ResumeService:
                 )
 
                 logger.info(
-                    f"Analyzed resume {user_id}: {len(analysis['skills'])} skills, "
+                    f"Analyzed resume {resume_id}: {len(analysis['skills'])} skills, "
                     f"{analysis['career_years']} years"
                 )
             else:
                 # Reindex 모드: 기존 분석 결과 사용
                 if not resume.analysis_result or not resume.experience_summary:
                     logger.warning(
-                        f"Resume {user_id} has no analysis result, skipping reindex optimization and running full analysis"
+                        f"Resume {resume_id} has no analysis result, skipping reindex optimization and running full analysis"
                     )
                     # 분석 결과가 없으면 reindex라도 분석 수행
-                    return ResumeService.process_resume_sync(user_id, reindex=False)
+                    return ResumeService.process_resume_sync(resume_id, reindex=False)
 
                 analysis = {
                     "skills": resume.analysis_result.get("skills", []),
                     "career_years": resume.analysis_result.get("career_years", 0),
                     "experience_summary": resume.experience_summary,
                 }
-                logger.info(f"Re-indexing resume {user_id} (skipping LLM analysis)")
+                logger.info(f"Re-indexing resume {resume_id} (skipping LLM analysis)")
 
             # 5. ChromaDB에 임베딩
             if (
@@ -320,24 +326,26 @@ class ResumeService:
                             {
                                 "career_years": analysis["career_years"],
                                 "skills_count": len(analysis["skills"]),
+                                "user_id": user_id,  # 메타데이터에 user_id 추가
                             }
                         ],
-                        ids=[str(user_id)],
+                        ids=[str(resume_id)],  # Vector DB ID는 resume_id 사용
                     )
-                    logger.info(f"Embedded resume {user_id} to Vector DB")
+                    logger.info(f"Embedded resume {resume_id} to Vector DB")
                 except Exception as e:
                     logger.warning(
-                        f"Failed to embed resume {user_id} to Vector DB: {str(e)}"
+                        f"Failed to embed resume {resume_id} to Vector DB: {str(e)}"
                     )
 
             return {
                 "success": True,
+                "resume_id": resume_id,
                 "user_id": user_id,
                 "skills_count": len(analysis["skills"]),
                 "career_years": analysis["career_years"],
             }
 
         except Exception as e:
-            error_msg = f"Error processing resume {user_id}: {str(e)}"
+            error_msg = f"Error processing resume {resume_id}: {str(e)}"
             logger.error(error_msg, exc_info=True)
             return {"success": False, "error": error_msg}

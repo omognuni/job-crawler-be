@@ -62,15 +62,15 @@ class ResumeViewSet(ModelViewSet):
         POST /api/v1/resumes/
         """
         try:
-            # user_id 자동 주입
-            data = request.data.copy()
-            data["user_id"] = request.user.id
-
-            serializer = self.get_serializer(data=data)
+            serializer = self.get_serializer(data=request.data)
             serializer.is_valid(raise_exception=True)
 
+            # user_id 주입
+            validated_data = serializer.validated_data
+            validated_data["user_id"] = request.user.id
+
             # Service를 통해 생성 (save() 메서드가 자동으로 Celery 작업 호출)
-            resume = ResumeService.create_resume(serializer.validated_data)
+            resume = ResumeService.create_resume(validated_data)
 
             response_serializer = self.get_serializer(resume)
             return Response(response_serializer.data, status=status.HTTP_201_CREATED)
@@ -88,7 +88,8 @@ class ResumeViewSet(ModelViewSet):
         PUT /api/v1/resumes/<resume_id>/
         """
         try:
-            serializer = self.get_serializer(data=request.data)
+            instance = self.get_object()
+            serializer = self.get_serializer(instance, data=request.data)
             serializer.is_valid(raise_exception=True)
 
             resume = ResumeService.update_resume(
@@ -116,7 +117,8 @@ class ResumeViewSet(ModelViewSet):
         PATCH /api/v1/resumes/<resume_id>/
         """
         try:
-            serializer = self.get_serializer(data=request.data, partial=True)
+            instance = self.get_object()
+            serializer = self.get_serializer(instance, data=request.data, partial=True)
             serializer.is_valid(raise_exception=True)
 
             resume = ResumeService.update_resume(

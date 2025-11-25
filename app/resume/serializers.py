@@ -5,12 +5,15 @@ from resume.models import Resume
 
 class ResumeSerializer(serializers.ModelSerializer):
     needs_analysis = serializers.SerializerMethodField()
+    user_id = serializers.IntegerField(read_only=True)
 
     class Meta:
         model = Resume
         fields = [
             "id",
             "user_id",
+            "title",
+            "is_primary",
             "content",
             "content_hash",
             "analysis_result",
