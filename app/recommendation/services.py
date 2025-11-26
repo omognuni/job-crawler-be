@@ -135,7 +135,11 @@ class RecommendationService:
                         match_reason=recommendation["match_reason"],
                     )
                 )
-            JobRecommendation.objects.bulk_create(recommendation_obj_list)
+            # 이미 받은 추천 공고가 있다면 공고 삭제 후 다시 저장
+            with transaction.atomic():
+                JobRecommendation.objects.filter(user_id=user_id).delete()
+                JobRecommendation.objects.bulk_create(recommendation_obj_list)
+
             return recommendations[:limit]
 
         except Resume.DoesNotExist:
