@@ -61,8 +61,11 @@ services:
     image: chromadb/chroma
     ports:
       - "8008:8000"
+    environment:
+      - IS_PERSISTENT=TRUE
+      - PERSIST_DIRECTORY=/chroma/chroma
     volumes:
-      - chroma_data:/chroma/.chroma/index
+      - chroma_data:/chroma/chroma
 
   neo4j:
     image: neo4j:5
