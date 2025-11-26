@@ -5,16 +5,12 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12,<3.14"
 dependencies = [
-    "crewai[google,google-genai,tools]>=0.86.0",
     "django>=5.2.7",
     "djangorestframework>=3.16.1",
     "gunicorn>=23.0.0",
-    "langchain-google-genai>=3.0.0",
-    "numpy>=2.0.0",
     "psycopg[binary]>=3.2.11",
     "pytest>=8.4.2",
     "pytest-django>=4.11.1",
-    "pytest-mock>=3.15.1",
     "whitenoise>=6.11.0",
     "chromadb>=0.5.5",
     "sentence-transformers>=3.0.1",
@@ -23,8 +19,22 @@ dependencies = [
     "drf-spectacular-sidecar>=2024.7.1",
     "djangorestframework-simplejwt>=5.3.1",
     "django-cors-headers>=4.6.0",
-    "pytest-celery>=1.2.1",
     "redis>=7.0.1",
     "celery>=5.5.3",
     "pylint-django>=2.6.1",
+    "torch>=2.2.0",
+    "google-genai>=0.2.0",
+]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv.sources]
+torch = [
+  { index = "pytorch-cpu" },
+]
+torchvision = [
+  { index = "pytorch-cpu" },
 ]
