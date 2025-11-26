@@ -63,9 +63,8 @@ services:
       - "8008:8000"
     environment:
       - IS_PERSISTENT=TRUE
-      - PERSIST_DIRECTORY=/chroma/chroma
     volumes:
-      - chroma_data:/chroma/chroma
+      - chroma_data:/data
 
   neo4j:
     image: neo4j:5
