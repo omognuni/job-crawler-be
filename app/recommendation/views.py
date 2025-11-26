@@ -189,14 +189,8 @@ class JobRecommendationViewSet(ModelViewSet):
                 f"in {elapsed_time:.3f} seconds"
             )
 
-            return Response(
-                {
-                    "resume_id": resume_id,
-                    "count": len(recommendations),
-                    "recommendations": recommendations,
-                    "response_time_seconds": round(elapsed_time, 3),
-                }
-            )
+            serializer = self.get_serializer(recommendations, many=True)
+            return Response(serializer.data)
         except Exception as e:
             logger.error(
                 f"Failed to generate recommendations for resume {resume_id}: {str(e)}",

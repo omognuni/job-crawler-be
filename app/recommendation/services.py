@@ -140,7 +140,7 @@ class RecommendationService:
                 JobRecommendation.objects.filter(user_id=user_id).delete()
                 JobRecommendation.objects.bulk_create(recommendation_obj_list)
 
-            return recommendations[:limit]
+            return recommendation_obj_list[:limit]
 
         except Resume.DoesNotExist:
             logger.error(f"Resume {resume_id} not found")
