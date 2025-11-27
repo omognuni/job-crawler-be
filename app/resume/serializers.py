@@ -4,7 +4,6 @@ from resume.models import Resume
 
 
 class ResumeSerializer(serializers.ModelSerializer):
-    needs_analysis = serializers.SerializerMethodField()
     user_id = serializers.IntegerField(read_only=True)
 
     class Meta:
@@ -18,12 +17,7 @@ class ResumeSerializer(serializers.ModelSerializer):
             "content_hash",
             "analysis_result",
             "analyzed_at",
-            "needs_analysis",
             "created_at",
             "updated_at",
         ]
         read_only_fields = ["content_hash", "analyzed_at"]
-
-    @extend_schema_field(serializers.BooleanField)
-    def get_needs_analysis(self, obj):
-        return obj.needs_analysis()

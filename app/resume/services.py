@@ -232,7 +232,7 @@ class ResumeService:
             }
 
     @staticmethod
-    def process_resume_sync(resume_id: int, reindex: bool = False) -> Dict:
+    def process_resume_sync(resume_id: int) -> Dict:
         """
         이력서 처리 (동기 방식)
 
@@ -257,60 +257,29 @@ class ResumeService:
 
             user_id = resume.user_id
 
-            # 2. 분석 필요 여부 체크
-            # reindex가 True이면 분석 필요 여부와 상관없이 진행하되, LLM 분석은 건너뜀
-            if not reindex and not resume.needs_analysis():
-                logger.info(
-                    f"Resume {resume_id} does not need re-analysis (hash unchanged)"
-                )
-                return {
-                    "success": True,
-                    "resume_id": resume_id,
-                    "user_id": user_id,
-                    "skipped": True,
-                    "reason": "No changes detected",
-                }
+            analysis = ResumeService.analyze_resume_with_llm(resume.content)
 
-            # 3. LLM 분석 (reindex가 아니고, 분석이 필요한 경우에만 수행)
-            if not reindex:
-                analysis = ResumeService.analyze_resume_with_llm(resume.content)
+            # 4. Resume 업데이트
+            resume.analysis_result = {
+                "skills": analysis["skills"],
+                "career_years": analysis["career_years"],
+                "strengths": analysis["strengths"],
+            }
+            resume.experience_summary = analysis["experience_summary"]
+            resume.analyzed_at = timezone.now()
+            resume.save(
+                update_fields=[
+                    "analysis_result",
+                    "experience_summary",
+                    "analyzed_at",
+                    "content_hash",
+                ]
+            )
 
-                # 4. Resume 업데이트
-                resume.analysis_result = {
-                    "skills": analysis["skills"],
-                    "career_years": analysis["career_years"],
-                    "strengths": analysis["strengths"],
-                }
-                resume.experience_summary = analysis["experience_summary"]
-                resume.analyzed_at = timezone.now()
-                resume.save(
-                    update_fields=[
-                        "analysis_result",
-                        "experience_summary",
-                        "analyzed_at",
-                        "content_hash",
-                    ]
-                )
-
-                logger.info(
-                    f"Analyzed resume {resume_id}: {len(analysis['skills'])} skills, "
-                    f"{analysis['career_years']} years"
-                )
-            else:
-                # Reindex 모드: 기존 분석 결과 사용
-                if not resume.analysis_result or not resume.experience_summary:
-                    logger.warning(
-                        f"Resume {resume_id} has no analysis result, skipping reindex optimization and running full analysis"
-                    )
-                    # 분석 결과가 없으면 reindex라도 분석 수행
-                    return ResumeService.process_resume_sync(resume_id, reindex=False)
-
-                analysis = {
-                    "skills": resume.analysis_result.get("skills", []),
-                    "career_years": resume.analysis_result.get("career_years", 0),
-                    "experience_summary": resume.experience_summary,
-                }
-                logger.info(f"Re-indexing resume {resume_id} (skipping LLM analysis)")
+            logger.info(
+                f"Analyzed resume {resume_id}: {len(analysis['skills'])} skills, "
+                f"{analysis['career_years']} years"
+            )
 
             # 5. ChromaDB에 임베딩
             if (
@@ -347,5 +316,19 @@ class ResumeService:
 
         except Exception as e:
             error_msg = f"Error processing resume {resume_id}: {str(e)}"
+            logger.error(error_msg, exc_info=True)
+            return {"success": False, "error": error_msg}
+
+    @staticmethod
+    def process_resume_async(resume_id: int) -> Resume | Dict:
+        try:
+            resume = Resume.objects.get(id=resume_id)
+            from resume.tasks import process_resume
+
+            process_resume.delay(resume.id).get()
+            resume.refresh_from_db()
+            return resume
+        except Exception as e:
+            error_msg = f"Error analyzing resume {resume_id}: {str(e)}"
             logger.error(error_msg, exc_info=True)
             return {"success": False, "error": error_msg}

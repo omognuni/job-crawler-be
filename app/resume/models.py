@@ -42,17 +42,9 @@ class Resume(models.Model):
         """이력서 내용의 해시값 계산"""
         return hashlib.sha256(self.content.encode("utf-8")).hexdigest()
 
-    def needs_analysis(self) -> bool:
-        """이력서 분석이 필요한지 확인"""
-        if self.analysis_result is None or self.analyzed_at is None:
-            return True
-
-        # 마지막 분석 시간보다 수정 시간이 더 최신이면 분석 필요
-        return self.updated_at > self.analyzed_at
-
     def save(self, *args, **kwargs):
         """
-        저장 시 해시값 자동 갱신 및 비동기 처리 태스크 호출
+        저장 시 해시값 자동 갱신
         """
         # 대표 이력서 설정 시 다른 이력서 해제
         if self.is_primary:
@@ -60,26 +52,6 @@ class Resume(models.Model):
                 id=self.id
             ).update(is_primary=False)
 
-        # 해시값 계산
-        old_hash = self.content_hash
         self.content_hash = self.calculate_hash()
 
-        # update_fields에 분석 결과 필드만 포함된 경우 태스크 호출 스킵
-        # (무한 루프 방지)
-        update_fields = kwargs.get("update_fields")
-        should_process = update_fields is None or not set(update_fields).issubset(
-            {"analysis_result", "experience_summary", "analyzed_at", "content_hash"}
-        )
-
-        # 모델 저장
         super().save(*args, **kwargs)
-
-        # 트랜잭션 커밋 후 비동기 처리 (내용이 변경된 경우에만)
-        if should_process and old_hash != self.content_hash:
-            transaction.on_commit(lambda: self._schedule_processing())
-
-    def _schedule_processing(self):
-        """비동기 처리 태스크 스케줄링"""
-        from .tasks import process_resume
-
-        process_resume.delay(self.id)

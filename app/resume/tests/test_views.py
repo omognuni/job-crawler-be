@@ -112,3 +112,19 @@ class TestResumeViewSet:
         # Then
         assert response.status_code == status.HTTP_204_NO_CONTENT
         assert not Resume.objects.filter(id=resume.id).exists()
+
+    def test_analyze_resume(self):
+        """이력서 분석"""
+        # Given
+        resume = Resume.objects.create(
+            user=self.user,
+            content="Java, Spring, 3년",
+        )
+
+        # When
+        response = self.client.get(f"/api/v1/resumes/{resume.id}/analyze/")
+        print(response.data)
+
+        # Then
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["id"] == resume.id

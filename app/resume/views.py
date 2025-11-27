@@ -7,6 +7,7 @@ Resume Views
 import logging
 
 from rest_framework import status
+from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet
 from resume.models import Resume
@@ -161,5 +162,23 @@ class ResumeViewSet(ModelViewSet):
             logger.error(f"Failed to delete resume {pk}: {str(e)}", exc_info=True)
             return Response(
                 {"error": "Failed to delete resume"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+    @action(methods=["GET"], detail=True, url_path="analyze", url_name="analyze")
+    def analyze(self, request, pk=None, *args, **kwargs):
+        """
+        이력서 분석
+
+        GET /api/v1/resumes/<resume_id>/analyze/
+        """
+        try:
+            resume = ResumeService.process_resume_async(pk)
+            serializer = self.get_serializer(resume)
+            return Response(serializer.data)
+        except Exception as e:
+            logger.error(f"Failed to analyze resume {pk}: {str(e)}", exc_info=True)
+            return Response(
+                {"error": "Failed to analyze resume"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
