@@ -123,8 +123,8 @@ class Command(BaseCommand):
         Process all Resumes by submitting them to Celery queue.
         """
         self.stdout.write(self.style.SUCCESS("Fetching Resumes..."))
-        user_ids = list(Resume.objects.values_list("user_id", flat=True))
-        total = len(user_ids)
+        resume_ids = list(Resume.objects.values_list("id", flat=True))
+        total = len(resume_ids)
 
         if total == 0:
             self.stdout.write(self.style.WARNING("No Resumes found."))
@@ -137,9 +137,9 @@ class Command(BaseCommand):
         # Submit tasks in batches
         tasks_submitted = 0
         for i in range(0, total, batch_size):
-            batch = user_ids[i : i + batch_size]
+            batch = resume_ids[i : i + batch_size]
             task_group = group(
-                process_resume.s(user_id, reindex=reindex) for user_id in batch
+                process_resume.s(resume_id, reindex=reindex) for resume_id in batch
             )
             result = task_group.apply_async()
 
