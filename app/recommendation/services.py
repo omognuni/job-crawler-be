@@ -91,7 +91,7 @@ class RecommendationService:
             # 3. Neo4j로 스킬 그래프 매칭하여 100개로 정제
             matched_postings = RecommendationService._filter_by_skill_graph(
                 candidate_posting_ids, user_skills
-            )[:100]
+            )[:limit]
 
             if not matched_postings:
                 logger.info(f"No skill-matched postings for user {user_id}")
