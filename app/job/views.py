@@ -6,9 +6,10 @@ Job Posting Views
 
 import logging
 
+from drf_spectacular.utils import extend_schema
 from job.models import JobPosting
 from job.permissions import HasSimpleSecretKey
-from job.serializers import JobPostingSerializer
+from job.serializers import JobPostingQuerySerializer, JobPostingSerializer
 from job.services import JobService
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
@@ -30,6 +31,10 @@ class JobPostingViewSet(GenericViewSet):
     serializer_class = JobPostingSerializer
     permission_classes = [HasSimpleSecretKey | IsAuthenticated]
 
+    @extend_schema(
+        parameters=[JobPostingQuerySerializer],
+        responses={status.HTTP_200_OK: JobPostingSerializer(many=True)},
+    )
     def list(self, request, *args, **kwargs):
         """
         채용 공고 목록 조회
