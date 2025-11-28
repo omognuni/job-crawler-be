@@ -10,9 +10,10 @@ import os
 import re
 from typing import Dict, List, Optional
 
-from common.vector_db import vector_db_client
 from django.db import transaction
 from django.utils import timezone
+from resume.dtos import ProcessResumeResultDTO, ResumeAnalysisResultDTO
+from resume.embeddings import ResumeEmbeddingService
 from resume.models import Resume
 from skill.services import SkillExtractionService
 
@@ -135,7 +136,7 @@ class ResumeService:
             return True
 
     @staticmethod
-    def analyze_resume_with_llm(content: str) -> Dict:
+    def _analyze_resume_with_llm(content: str) -> ResumeAnalysisResultDTO:
         """
         LLM을 사용하여 이력서 분석
 
@@ -143,7 +144,7 @@ class ResumeService:
             content: 이력서 내용
 
         Returns:
-            분석 결과 딕셔너리 (career_years, strengths, experience_summary)
+            ResumeAnalysisResultDTO: 분석 결과 (career_years, strengths, experience_summary)
         """
         # 스킬 추출 (LLM-Free)
         skills = SkillExtractionService.extract_skills(content)
@@ -152,12 +153,12 @@ class ResumeService:
         api_key = os.getenv("GOOGLE_API_KEY")
         if not api_key:
             logger.warning("Google API key not found - using fallback")
-            return {
-                "skills": skills,
-                "career_years": 0,
-                "strengths": "API 키 미설정으로 분석 불가",
-                "experience_summary": f"보유 스킬: {', '.join(skills[:10])}",
-            }
+            return ResumeAnalysisResultDTO(
+                skills=skills,
+                career_years=0,
+                strengths="API 키 미설정으로 분석 불가",
+                experience_summary=f"보유 스킬: {', '.join(skills[:10])}",
+            )
 
         try:
             from google import genai
@@ -207,32 +208,32 @@ class ResumeService:
             )
             result = json.loads(result_text)
 
-            return {
-                "skills": skills,
-                "career_years": int(result.get("career_years", 0)),
-                "strengths": result.get("strengths", "분석 불가"),
-                "experience_summary": result.get(
+            return ResumeAnalysisResultDTO(
+                skills=skills,
+                career_years=int(result.get("career_years", 0)),
+                strengths=result.get("strengths", "분석 불가"),
+                experience_summary=result.get(
                     "experience_summary",
                     f"경력 {result.get('career_years', 0)}년, {', '.join(skills[:5])} 경험",
                 ),
-            }
+            )
 
         except Exception as e:
             logger.warning(f"LLM analysis failed: {e}", exc_info=True)
             # Fallback
-            return {
-                "skills": skills,
-                "career_years": 0,
-                "strengths": (
+            return ResumeAnalysisResultDTO(
+                skills=skills,
+                career_years=0,
+                strengths=(
                     f"{', '.join(skills[:3])} 중심 경험"
                     if skills
                     else "이력서 분석 필요"
                 ),
-                "experience_summary": f"보유 스킬: {', '.join(skills[:10])}",
-            }
+                experience_summary=f"보유 스킬: {', '.join(skills[:10])}",
+            )
 
     @staticmethod
-    def process_resume_sync(resume_id: int) -> Dict:
+    def process_resume_sync(resume_id: int) -> ProcessResumeResultDTO:
         """
         이력서 처리 (동기 방식)
 
@@ -244,7 +245,7 @@ class ResumeService:
             reindex: 강제 재인덱싱 여부 (True일 경우 LLM 분석 건너뛰고 임베딩만 수행)
 
         Returns:
-            처리 결과 딕셔너리
+            ProcessResumeResultDTO: 처리 결과
         """
         try:
             # 1. Resume 조회
@@ -253,19 +254,19 @@ class ResumeService:
             except Resume.DoesNotExist:
                 error_msg = f"Resume {resume_id} not found"
                 logger.error(error_msg)
-                return {"success": False, "error": error_msg}
+                return ProcessResumeResultDTO(success=False, error=error_msg)
 
             user_id = resume.user_id
 
-            analysis = ResumeService.analyze_resume_with_llm(resume.content)
+            analysis = ResumeService._analyze_resume_with_llm(resume.content)
 
             # 4. Resume 업데이트
             resume.analysis_result = {
-                "skills": analysis["skills"],
-                "career_years": analysis["career_years"],
-                "strengths": analysis["strengths"],
+                "skills": analysis.skills,
+                "career_years": analysis.career_years,
+                "strengths": analysis.strengths,
             }
-            resume.experience_summary = analysis["experience_summary"]
+            resume.experience_summary = analysis.experience_summary
             resume.analyzed_at = timezone.now()
             resume.save(
                 update_fields=[
@@ -277,58 +278,22 @@ class ResumeService:
             )
 
             logger.info(
-                f"Analyzed resume {resume_id}: {len(analysis['skills'])} skills, "
-                f"{analysis['career_years']} years"
+                f"Analyzed resume {resume_id}: {len(analysis.skills)} skills, "
+                f"{analysis.career_years} years"
             )
 
             # 5. ChromaDB에 임베딩
-            if (
-                analysis["experience_summary"]
-                and len(analysis["experience_summary"]) > 10
-            ):
-                try:
-                    collection = vector_db_client.get_or_create_collection("resumes")
-                    vector_db_client.upsert_documents(
-                        collection=collection,
-                        documents=[analysis["experience_summary"]],
-                        metadatas=[
-                            {
-                                "career_years": analysis["career_years"],
-                                "skills_count": len(analysis["skills"]),
-                                "user_id": user_id,  # 메타데이터에 user_id 추가
-                            }
-                        ],
-                        ids=[str(resume_id)],  # Vector DB ID는 resume_id 사용
-                    )
-                    logger.info(f"Embedded resume {resume_id} to Vector DB")
-                except Exception as e:
-                    logger.warning(
-                        f"Failed to embed resume {resume_id} to Vector DB: {str(e)}"
-                    )
+            ResumeEmbeddingService.embed_resume(resume_id, user_id, analysis)
 
-            return {
-                "success": True,
-                "resume_id": resume_id,
-                "user_id": user_id,
-                "skills_count": len(analysis["skills"]),
-                "career_years": analysis["career_years"],
-            }
+            return ProcessResumeResultDTO(
+                success=True,
+                resume_id=resume_id,
+                user_id=user_id,
+                skills_count=len(analysis.skills),
+                career_years=analysis.career_years,
+            )
 
         except Exception as e:
             error_msg = f"Error processing resume {resume_id}: {str(e)}"
             logger.error(error_msg, exc_info=True)
-            return {"success": False, "error": error_msg}
-
-    @staticmethod
-    def process_resume_async(resume_id: int) -> Resume | Dict:
-        try:
-            resume = Resume.objects.get(id=resume_id)
-            from resume.tasks import process_resume
-
-            process_resume.delay(resume.id).get()
-            resume.refresh_from_db()
-            return resume
-        except Exception as e:
-            error_msg = f"Error analyzing resume {resume_id}: {str(e)}"
-            logger.error(error_msg, exc_info=True)
-            return {"success": False, "error": error_msg}
+            return ProcessResumeResultDTO(success=False, error=error_msg)

@@ -30,12 +30,12 @@ def process_resume(self, resume_id: int):
         # ResumeService에 위임
         result = ResumeService.process_resume_sync(resume_id)
 
-        if not result.get("success"):
+        if not result.success:
             # 처리 실패 시 재시도
-            error = Exception(result.get("error", "Unknown error"))
+            error = Exception(result.error or "Unknown error")
             raise self.retry(exc=error, countdown=60)
 
-        return result
+        return result.model_dump()
 
     except Exception as e:
         error_msg = f"Error processing resume {resume_id}: {str(e)}"

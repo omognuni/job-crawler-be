@@ -13,6 +13,7 @@ from rest_framework.viewsets import ModelViewSet
 from resume.models import Resume
 from resume.serializers import ResumeSerializer
 from resume.services import ResumeService
+from resume.tasks import process_resume
 
 logger = logging.getLogger(__name__)
 
@@ -173,7 +174,8 @@ class ResumeViewSet(ModelViewSet):
         GET /api/v1/resumes/<resume_id>/analyze/
         """
         try:
-            resume = ResumeService.process_resume_async(pk)
+            process_resume.delay(pk).get()
+            resume = Resume.objects.get(pk=pk)
             serializer = self.get_serializer(resume)
             return Response(serializer.data)
         except Exception as e:

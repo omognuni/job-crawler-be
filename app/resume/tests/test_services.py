@@ -106,18 +106,18 @@ class TestResumeService:
         content = "Backend Developer with Python and Django experience"
 
         # When
-        result = ResumeService.analyze_resume_with_llm(content)
+        result = ResumeService._analyze_resume_with_llm(content)
 
         # Then
-        assert result["skills"] == ["Python", "Django"]
-        assert result["career_years"] == 0
-        assert "API 키" in result["strengths"]
+        assert result.skills == ["Python", "Django"]
+        assert result.career_years == 0
+        assert "API 키" in result.strengths
 
-    @patch("resume.services.vector_db_client")
+    @patch("resume.services.ResumeEmbeddingService")
     @patch("resume.services.SkillExtractionService")
     @patch("resume.services.os.getenv")
     def test_process_resume_sync_success(
-        self, mock_getenv, mock_skill_service, mock_vector_db
+        self, mock_getenv, mock_skill_service, mock_embedding_service
     ):
         """이력서 처리 (동기) 성공"""
         # Given
@@ -130,18 +130,17 @@ class TestResumeService:
         mock_getenv.return_value = None  # Fallback mode
         mock_skill_service.extract_skills.return_value = ["Python", "Django"]
 
-        # Mock vector DB
-        mock_collection = MagicMock()
-        mock_vector_db.get_or_create_collection.return_value = mock_collection
+        # Mock embedding service
+        mock_embedding_service.embed_resume.return_value = True
 
         # When
         result = ResumeService.process_resume_sync(resume.id)
 
         # Then
-        assert result["success"] is True
-        assert result["resume_id"] == resume.id
-        assert result["user_id"] == user.id
-        assert result["skills_count"] == 2
+        assert result.success is True
+        assert result.resume_id == resume.id
+        assert result.user_id == user.id
+        assert result.skills_count == 2
 
         # Verify DB was updated
         resume.refresh_from_db()
@@ -155,5 +154,5 @@ class TestResumeService:
         result = ResumeService.process_resume_sync(9999)
 
         # Then
-        assert result["success"] is False
-        assert "not found" in result["error"]
+        assert result.success is False
+        assert "not found" in result.error
