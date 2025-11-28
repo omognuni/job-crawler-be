@@ -7,10 +7,11 @@ Recommendation Views
 import logging
 import time
 
-from recommendation.models import JobRecommendation
+from recommendation.models import JobRecommendation, RecommendationPrompt
 from recommendation.serializers import (
     JobRecommendationReadSerializer,
     JobRecommendationWriteSerializer,
+    RecommendationPromptSerializer,
 )
 from recommendation.services import RecommendationService
 from rest_framework import status
@@ -170,6 +171,9 @@ class JobRecommendationViewSet(ModelViewSet):
         try:
             resume_id = int(resume_id)
             limit = int(request.query_params.get("limit", 10))
+            prompt_id = request.query_params.get("prompt_id")
+            if prompt_id:
+                prompt_id = int(prompt_id)
         except ValueError:
             return Response(
                 {"error": "resume_id and limit must be integers"},
@@ -179,7 +183,7 @@ class JobRecommendationViewSet(ModelViewSet):
         try:
             # 실시간 추천 생성
             recommendations = RecommendationService.get_recommendations(
-                resume_id, limit=limit
+                resume_id, limit=limit, prompt_id=prompt_id
             )
 
             # 응답 시간 로깅
@@ -200,3 +204,17 @@ class JobRecommendationViewSet(ModelViewSet):
                 {"error": "Failed to generate recommendations"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
+
+
+class RecommendationPromptViewSet(ModelViewSet):
+    """
+    추천 프롬프트 ViewSet
+    """
+
+    queryset = RecommendationPrompt.objects.all()
+    serializer_class = RecommendationPromptSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        """활성화된 프롬프트만 조회"""
+        return RecommendationPrompt.objects.filter(is_active=True)

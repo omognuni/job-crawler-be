@@ -12,7 +12,7 @@ from common.graph_db import graph_db_client
 from common.vector_db import vector_db_client
 from django.db import transaction
 from job.models import JobPosting
-from recommendation.models import JobRecommendation
+from recommendation.models import JobRecommendation, RecommendationPrompt
 from resume.models import Resume
 from skill.services import SkillExtractionService
 
@@ -27,7 +27,9 @@ class RecommendationService:
     """
 
     @staticmethod
-    def get_recommendations(resume_id: int, limit: int = 10) -> List[Dict]:
+    def get_recommendations(
+        resume_id: int, limit: int = 10, prompt_id: Optional[int] = None
+    ) -> List[Dict]:
         """
         사용자에게 적합한 채용 공고 추천
 
@@ -99,11 +101,19 @@ class RecommendationService:
             for posting_id in matched_postings:
                 try:
                     posting = JobPosting.objects.get(posting_id=posting_id)
-                    score, reason = (
-                        RecommendationService._calculate_match_score_and_reason(
-                            posting, user_skills, user_career_years
+                    if prompt_id:
+                        # LLM 기반 평가 (프롬프트 선택 시)
+                        prompt = RecommendationPrompt.objects.get(id=prompt_id)
+                        score, reason = RecommendationService._evaluate_match_with_llm(
+                            posting, resume, prompt
                         )
-                    )
+                    else:
+                        # 기존 로직 (Rule-based)
+                        score, reason = (
+                            RecommendationService._calculate_match_score_and_reason(
+                                posting, user_skills, user_career_years
+                            )
+                        )
                     recommendations.append(
                         {
                             "posting_id": posting_id,
@@ -269,6 +279,93 @@ class RecommendationService:
         score = min(score, 100)
 
         return score, match_reason
+
+    @staticmethod
+    def _evaluate_match_with_llm(
+        posting: JobPosting, resume: Resume, prompt: RecommendationPrompt
+    ) -> tuple[int, str]:
+        """
+        LLM을 사용하여 공고와 이력서 간의 매칭 평가
+
+        Args:
+            posting: 채용 공고 객체
+            resume: 이력서 객체
+            prompt: 사용할 프롬프트 객체
+
+        Returns:
+            (match_score, match_reason) 튜플
+        """
+        import json
+        import os
+        import re
+
+        api_key = os.getenv("GOOGLE_API_KEY")
+        if not api_key:
+            logger.warning("Google API key not found - using fallback")
+            return 50, "API 키 미설정으로 상세 분석 불가 (기본 점수)"
+
+        try:
+            from google import genai
+            from google.genai.types import GenerateContentConfig
+
+            client = genai.Client(api_key=api_key)
+
+            # 이력서 요약 (기존 분석 결과 활용)
+            resume_summary = resume.experience_summary or "이력서 내용 없음"
+            skills = ", ".join(resume.analysis_result.get("skills", []))
+
+            # 공고 요약
+            job_summary = f"""
+            Company: {posting.company_name}
+            Position: {posting.position}
+            Main Tasks: {posting.main_tasks}
+            Requirements: {posting.requirements}
+            Preferred: {posting.preferred_points}
+            """
+
+            # 프롬프트 구성
+            full_prompt = f"""
+            {prompt.content}
+
+            [Candidate Resume Summary]
+            {resume_summary}
+            Skills: {skills}
+
+            [Job Description]
+            {job_summary}
+
+            Based on the above, evaluate the candidate's fit for this job.
+            Return a JSON object with:
+            - score: Integer between 0 and 100
+            - reason: A concise explanation (1 sentence, Korean)
+
+            JSON Format Only:
+            {{
+                "score": 85,
+                "reason": "..."
+            }}
+            """
+
+            response = client.models.generate_content(
+                model="gemini-2.0-flash",
+                contents=full_prompt,
+                config=GenerateContentConfig(
+                    temperature=0.2,
+                    max_output_tokens=200,
+                ),
+            )
+
+            result_text = response.text.strip()
+            result_text = re.sub(
+                r"^```json\s*|\s*```$", "", result_text, flags=re.MULTILINE
+            )
+            result = json.loads(result_text)
+
+            return int(result.get("score", 50)), result.get("reason", "분석 완료")
+
+        except Exception as e:
+            logger.error(f"LLM evaluation failed: {e}", exc_info=True)
+            return 50, "LLM 분석 실패 (기본 점수)"
 
     @staticmethod
     def get_skill_statistics(skill_name: str) -> Dict:

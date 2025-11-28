@@ -1,6 +1,6 @@
 from job.models import JobPosting
 from job.serializers import JobPostingSerializer
-from recommendation.models import JobRecommendation
+from recommendation.models import JobRecommendation, RecommendationPrompt
 from rest_framework import serializers
 
 
@@ -42,3 +42,12 @@ class JobRecommendationWriteSerializer(serializers.ModelSerializer):
             "created_at",
         ]
         read_only_fields = ["id", "created_at"]
+
+
+class RecommendationPromptSerializer(serializers.ModelSerializer):
+    """추천 프롬프트 Serializer"""
+
+    class Meta:
+        model = RecommendationPrompt
+        fields = ["id", "name", "content", "is_active", "created_at", "updated_at"]
+        read_only_fields = ["id", "created_at", "updated_at"]

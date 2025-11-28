@@ -18,3 +18,18 @@ class JobRecommendation(models.Model):
         return (
             f"Recommendation #{self.rank} for user {self.user_id}: {self.job_posting}"
         )
+
+
+class RecommendationPrompt(models.Model):
+    name = models.CharField(max_length=100, help_text="프롬프트 이름 (예: 기술 면접관)")
+    content = models.TextField(help_text="프롬프트 내용")
+    is_active = models.BooleanField(default=True, help_text="활성화 여부")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "agent_recommendation_prompt"
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return self.name
