@@ -63,7 +63,7 @@ class JobService:
         if career_max := query_params.get("career_max"):
             filters["career_max"] = career_max
 
-        queryset = JobPosting.objects.filter(**filters)
+        queryset = JobPosting.objects.filter(**filters).order_by("-created_at")
         return queryset
 
     @staticmethod
