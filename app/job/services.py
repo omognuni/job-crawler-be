@@ -41,14 +41,30 @@ class JobService:
             return None
 
     @staticmethod
-    def get_all_job_postings() -> List[JobPosting]:
+    def get_all_job_postings(query_params: Dict) -> List[JobPosting]:
         """
         모든 채용 공고 조회
 
         Returns:
             JobPosting 쿼리셋
         """
-        return JobPosting.objects.all()
+
+        filters = {}
+
+        if start_date := query_params.get("start_date"):
+            filters["created_at__gte"] = start_date
+
+        if end_date := query_params.get("end_date"):
+            filters["created_at__lte"] = end_date
+
+        if career_min := query_params.get("career_min"):
+            filters["career_min"] = career_min
+
+        if career_max := query_params.get("career_max"):
+            filters["career_max"] = career_max
+
+        queryset = JobPosting.objects.filter(**filters)
+        return queryset
 
     @staticmethod
     def create_job_posting(data: Dict) -> JobPosting:

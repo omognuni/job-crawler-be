@@ -37,7 +37,16 @@ class JobPostingViewSet(GenericViewSet):
         GET /api/v1/jobs/
         """
         try:
-            job_postings = JobService.get_all_job_postings()
+            query_serializer = JobPostingQuerySerializer(data=request.query_params)
+            if not query_serializer.is_valid():
+                return Response(
+                    {"error": "Invalid query parameters"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            job_postings = JobService.get_all_job_postings(
+                query_serializer.validated_data
+            )
             serializer = self.get_serializer(job_postings, many=True)
             return Response(serializer.data)
         except Exception as e:

@@ -21,3 +21,12 @@ class JobPostingSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
+
+
+class JobPostingQuerySerializer(serializers.Serializer):
+    """채용 공고 조회용 QuerySerializer"""
+
+    start_date = serializers.DateField(required=False)
+    end_date = serializers.DateField(required=False)
+    career_min = serializers.IntegerField(required=False)
+    career_max = serializers.IntegerField(required=False)
