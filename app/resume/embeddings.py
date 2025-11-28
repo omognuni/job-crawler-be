@@ -20,9 +20,7 @@ class ResumeEmbeddingService:
         이력서 분석 결과를 Vector DB에 임베딩합니다.
 
         Args:
-            resume_id: 이력서 ID
-            user_id: 사용자 ID
-            analysis: 분석 결과 (experience_summary, career_years, skills 포함)
+            resume: 이력서 모델
 
         Returns:
             성공 여부
@@ -39,9 +37,9 @@ class ResumeEmbeddingService:
                 documents=[experience_summary],
                 metadatas=[
                     {
-                        "career_years": resume.analysis_result.career_years,
-                        "skills_count": len(resume.analysis_result.skills),
-                        "user_id": resume.user_id,
+                        "career_years": resume.analysis_result.get("career_years", 0),
+                        "skills_count": len(resume.analysis_result.get("skills", [])),
+                        "user_id": resume.user,
                     }
                 ],
                 ids=[str(resume.id)],
@@ -49,5 +47,5 @@ class ResumeEmbeddingService:
             logger.info(f"Embedded resume {resume.id} to Vector DB")
             return True
         except Exception as e:
-            logger.warning(f"Failed to embed resume {resume_id} to Vector DB: {str(e)}")
+            logger.warning(f"Failed to embed resume {resume.id} to Vector DB: {str(e)}")
             return False
