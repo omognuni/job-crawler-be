@@ -29,14 +29,14 @@ class RecommendationService:
 
     @staticmethod
     def get_recommendations(
-        resume_id: int, limit: int = 10, prompt_id: Optional[int] = None
+        resume_id: int, limit: int = 100, prompt_id: Optional[int] = None
     ) -> List[Dict]:
         """
         사용자에게 적합한 채용 공고 추천
 
         Args:
             resume_id: 이력서 ID
-            limit: 반환할 추천 개수 (기본 10개)
+            limit: 반환할 추천 개수 (기본 100개)
 
         Returns:
             추천 공고 리스트 (각 항목은 posting_id, match_score, match_reason 포함)
