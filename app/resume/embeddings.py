@@ -2,7 +2,7 @@ import logging
 from typing import Dict, List, Optional
 
 from common.vector_db import vector_db_client
-from resume.dtos import ResumeAnalysisResultDTO
+from resume.models import Resume
 
 logger = logging.getLogger(__name__)
 
@@ -14,7 +14,7 @@ class ResumeEmbeddingService:
 
     @staticmethod
     def embed_resume(
-        resume_id: int, user_id: int, analysis: ResumeAnalysisResultDTO
+        resume: Resume,
     ) -> bool:
         """
         이력서 분석 결과를 Vector DB에 임베딩합니다.
@@ -27,7 +27,7 @@ class ResumeEmbeddingService:
         Returns:
             성공 여부
         """
-        experience_summary = analysis.experience_summary
+        experience_summary = resume.experience_summary
 
         if not experience_summary or len(experience_summary) <= 10:
             return False
@@ -39,14 +39,14 @@ class ResumeEmbeddingService:
                 documents=[experience_summary],
                 metadatas=[
                     {
-                        "career_years": analysis.career_years,
-                        "skills_count": len(analysis.skills),
-                        "user_id": user_id,
+                        "career_years": resume.analysis_result.career_years,
+                        "skills_count": len(resume.analysis_result.skills),
+                        "user_id": resume.user_id,
                     }
                 ],
-                ids=[str(resume_id)],
+                ids=[str(resume.id)],
             )
-            logger.info(f"Embedded resume {resume_id} to Vector DB")
+            logger.info(f"Embedded resume {resume.id} to Vector DB")
             return True
         except Exception as e:
             logger.warning(f"Failed to embed resume {resume_id} to Vector DB: {str(e)}")

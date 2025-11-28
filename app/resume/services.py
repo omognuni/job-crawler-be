@@ -111,6 +111,8 @@ class ResumeService:
             for key, value in data.items():
                 setattr(resume, key, value)
             resume.save()
+            resume.refresh_from_db()
+            ResumeEmbeddingService.embed_resume(resume)
             logger.info(f"Updated Resume {resume_id} for user {user_id}")
             return resume
 
@@ -276,6 +278,7 @@ class ResumeService:
                     "content_hash",
                 ]
             )
+            resume.refresh_from_db()
 
             logger.info(
                 f"Analyzed resume {resume_id}: {len(analysis.skills)} skills, "
@@ -283,7 +286,7 @@ class ResumeService:
             )
 
             # 5. ChromaDB에 임베딩
-            ResumeEmbeddingService.embed_resume(resume_id, user_id, analysis)
+            ResumeEmbeddingService.embed_resume(resume)
 
             return ProcessResumeResultDTO(
                 success=True,
