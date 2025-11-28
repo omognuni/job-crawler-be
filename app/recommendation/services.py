@@ -6,6 +6,7 @@ AI-Free 실시간 채용 공고 추천 엔진
 """
 
 import logging
+import time
 from typing import Dict, List, Optional
 
 from common.graph_db import graph_db_client
@@ -98,37 +99,64 @@ class RecommendationService:
 
             # 4. 각 공고에 대해 match_score 계산 및 match_reason 생성
             recommendations = []
-            for posting_id in matched_postings:
-                try:
-                    posting = JobPosting.objects.get(posting_id=posting_id)
-                    if prompt_id:
-                        # LLM 기반 평가 (프롬프트 선택 시)
-                        prompt = RecommendationPrompt.objects.get(id=prompt_id)
-                        score, reason = RecommendationService._evaluate_match_with_llm(
-                            posting, resume, prompt
+
+            # LLM 평가가 필요한 공고 수집
+            postings_to_evaluate = []
+            if prompt_id:
+                for posting_id in matched_postings:
+                    try:
+                        posting = JobPosting.objects.get(posting_id=posting_id)
+                        postings_to_evaluate.append(posting)
+                    except JobPosting.DoesNotExist:
+                        continue
+
+                # 일괄 평가 수행
+                if postings_to_evaluate:
+                    prompt = RecommendationPrompt.objects.get(id=prompt_id)
+                    batch_results = (
+                        RecommendationService._evaluate_match_batch_with_llm(
+                            postings_to_evaluate, resume, prompt
                         )
-                    else:
-                        # 기존 로직 (Rule-based)
+                    )
+
+                    for posting, result in zip(postings_to_evaluate, batch_results):
+                        recommendations.append(
+                            {
+                                "posting_id": posting.posting_id,
+                                "company_name": posting.company_name,
+                                "position": posting.position,
+                                "match_score": result["score"],
+                                "match_reason": result["reason"],
+                                "url": posting.url,
+                                "location": posting.location,
+                                "employment_type": posting.employment_type,
+                            }
+                        )
+            else:
+                # 기존 로직 (Rule-based) - 개별 처리
+                for posting_id in matched_postings:
+                    try:
+                        posting = JobPosting.objects.get(posting_id=posting_id)
                         score, reason = (
                             RecommendationService._calculate_match_score_and_reason(
                                 posting, user_skills, user_career_years
                             )
                         )
-                    recommendations.append(
-                        {
-                            "posting_id": posting_id,
-                            "company_name": posting.company_name,
-                            "position": posting.position,
-                            "match_score": score,
-                            "match_reason": reason,
-                            "url": posting.url,
-                            "location": posting.location,
-                            "employment_type": posting.employment_type,
-                        }
-                    )
-                except JobPosting.DoesNotExist:
-                    logger.warning(f"JobPosting {posting_id} not found")
-                    continue
+                        recommendations.append(
+                            {
+                                "posting_id": posting_id,
+                                "company_name": posting.company_name,
+                                "position": posting.position,
+                                "match_score": score,
+                                "match_reason": reason,
+                                "url": posting.url,
+                                "location": posting.location,
+                                "employment_type": posting.employment_type,
+                            }
+                        )
+                    except JobPosting.DoesNotExist:
+                        logger.warning(f"JobPosting {posting_id} not found")
+                        continue
 
             # 5. match_score 기준 정렬 및 상위 limit개 반환
             recommendation_obj_list = []
@@ -281,19 +309,19 @@ class RecommendationService:
         return score, match_reason
 
     @staticmethod
-    def _evaluate_match_with_llm(
-        posting: JobPosting, resume: Resume, prompt: RecommendationPrompt
-    ) -> tuple[int, str]:
+    def _evaluate_match_batch_with_llm(
+        postings: List[JobPosting], resume: Resume, prompt: RecommendationPrompt
+    ) -> List[Dict]:
         """
-        LLM을 사용하여 공고와 이력서 간의 매칭 평가
+        LLM을 사용하여 여러 공고와 이력서 간의 매칭 평가 (일괄 처리)
 
         Args:
-            posting: 채용 공고 객체
+            postings: 채용 공고 객체 리스트
             resume: 이력서 객체
             prompt: 사용할 프롬프트 객체
 
         Returns:
-            (match_score, match_reason) 튜플
+            평가 결과 리스트 [{"score": int, "reason": str}, ...]
         """
         import json
         import os
@@ -302,26 +330,32 @@ class RecommendationService:
         api_key = os.getenv("GOOGLE_API_KEY")
         if not api_key:
             logger.warning("Google API key not found - using fallback")
-            return 50, "API 키 미설정으로 상세 분석 불가 (기본 점수)"
+            return [{"score": 50, "reason": "API 키 미설정"} for _ in postings]
 
         try:
             from google import genai
+            from google.genai.errors import ClientError
             from google.genai.types import GenerateContentConfig
 
             client = genai.Client(api_key=api_key)
 
-            # 이력서 요약 (기존 분석 결과 활용)
+            # 이력서 요약
             resume_summary = resume.experience_summary or "이력서 내용 없음"
             skills = ", ".join(resume.analysis_result.get("skills", []))
 
-            # 공고 요약
-            job_summary = f"""
-            Company: {posting.company_name}
-            Position: {posting.position}
-            Main Tasks: {posting.main_tasks}
-            Requirements: {posting.requirements}
-            Preferred: {posting.preferred_points}
-            """
+            # 공고 목록 요약
+            jobs_text = ""
+            for idx, posting in enumerate(postings):
+                jobs_text += f"""
+                [Job {idx+1}]
+                ID: {posting.posting_id}
+                Company: {posting.company_name}
+                Position: {posting.position}
+                Main Tasks: {posting.main_tasks}
+                Requirements: {posting.requirements}
+                Preferred: {posting.preferred_points}
+                -------------------
+                """
 
             # 프롬프트 구성
             full_prompt = f"""
@@ -331,41 +365,89 @@ class RecommendationService:
             {resume_summary}
             Skills: {skills}
 
-            [Job Description]
-            {job_summary}
+            [Job Postings]
+            {jobs_text}
 
-            Based on the above, evaluate the candidate's fit for this job.
-            Return a JSON object with:
+            Based on the resume, evaluate the candidate's fit for EACH job posting above.
+            Return a JSON list of objects, one for each job, in the same order.
+
+            Each object must have:
             - score: Integer between 0 and 100
             - reason: A concise explanation (1 sentence, Korean)
 
             JSON Format Only:
-            {{
-                "score": 85,
-                "reason": "..."
-            }}
+            [
+                {{
+                    "score": 85,
+                    "reason": "..."
+                }},
+                {{
+                    "score": 40,
+                    "reason": "..."
+                }}
+            ]
             """
 
-            response = client.models.generate_content(
-                model="gemini-2.0-flash",
-                contents=full_prompt,
-                config=GenerateContentConfig(
-                    temperature=0.2,
-                    max_output_tokens=200,
-                ),
-            )
+            # 재시도 로직
+            max_retries = 3
+            response = None
+
+            for attempt in range(max_retries):
+                try:
+                    response = client.models.generate_content(
+                        model="gemini-2.0-flash",
+                        contents=full_prompt,
+                        config=GenerateContentConfig(
+                            temperature=0.2,
+                            max_output_tokens=2000,  # 토큰 수 증가
+                        ),
+                    )
+                    break
+                except ClientError as e:
+                    if e.code == 429:
+                        if attempt < max_retries - 1:
+                            sleep_time = 2 * (attempt + 1)
+                            logger.warning(
+                                f"Gemini API Rate limit hit. Retrying in {sleep_time}s..."
+                            )
+                            time.sleep(sleep_time)
+                            continue
+                    raise e
 
             result_text = response.text.strip()
             result_text = re.sub(
                 r"^```json\s*|\s*```$", "", result_text, flags=re.MULTILINE
             )
-            result = json.loads(result_text)
+            results = json.loads(result_text)
 
-            return int(result.get("score", 50)), result.get("reason", "분석 완료")
+            # 결과 개수 검증 및 보정
+            if len(results) != len(postings):
+                logger.warning(
+                    f"Mismatch in batch results: expected {len(postings)}, got {len(results)}"
+                )
+                # 부족한 경우 기본값 채움
+                while len(results) < len(postings):
+                    results.append({"score": 50, "reason": "분석 결과 누락"})
+                # 넘치는 경우 자름
+                results = results[: len(postings)]
+
+            return results
 
         except Exception as e:
-            logger.error(f"LLM evaluation failed: {e}", exc_info=True)
-            return 50, "LLM 분석 실패 (기본 점수)"
+            logger.error(f"Batch LLM evaluation failed: {e}", exc_info=True)
+            return [{"score": 50, "reason": "LLM 분석 실패"} for _ in postings]
+
+    @staticmethod
+    def _evaluate_match_with_llm(
+        posting: JobPosting, resume: Resume, prompt: RecommendationPrompt
+    ) -> tuple[int, str]:
+        """
+        [Deprecated] 단일 공고 평가 (하위 호환성 유지)
+        """
+        results = RecommendationService._evaluate_match_batch_with_llm(
+            [posting], resume, prompt
+        )
+        return results[0]["score"], results[0]["reason"]
 
     @staticmethod
     def get_skill_statistics(skill_name: str) -> Dict:

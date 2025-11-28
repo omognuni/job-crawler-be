@@ -16,9 +16,10 @@ from recommendation.serializers import (
 from recommendation.services import RecommendationService
 from rest_framework import status
 from rest_framework.decorators import action
+from rest_framework.mixins import ListModelMixin
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-from rest_framework.viewsets import ModelViewSet
+from rest_framework.viewsets import GenericViewSet, ModelViewSet
 
 logger = logging.getLogger(__name__)
 
@@ -206,7 +207,7 @@ class JobRecommendationViewSet(ModelViewSet):
             )
 
 
-class RecommendationPromptViewSet(ModelViewSet):
+class RecommendationPromptViewSet(GenericViewSet, ListModelMixin):
     """
     추천 프롬프트 ViewSet
     """
