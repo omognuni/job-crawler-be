@@ -54,44 +54,115 @@ class RecommendationService:
                 )
                 return []
 
-            # 2. ChromaDB에서 벡터 유사도 기반 후보 조회 (50개)
+            # 2. 하이브리드 검색 (Vector + Graph) 및 재랭킹
+            candidate_posting_scores = (
+                {}
+            )  # posting_id -> (vector_score, skill_match_count)
+
+            # [Vector Search] ChromaDB에서 유사한 공고 조회 (50개)
             resumes_collection = vector_db_client.get_or_create_collection("resumes")
             job_postings_collection = vector_db_client.get_or_create_collection(
                 "job_postings"
             )
 
-            # 사용자 이력서 벡터 조회 (Vector DB ID는 resume_id 사용)
+            # 이력서 임베딩 벡터를 직접 쿼리로 사용하여 공고 검색
+            # 이 방식은 이력서 임베딩과 공고 임베딩을 직접 비교하므로 의미적 유사도 검색에 효과적
+            # 대안: experience_summary 텍스트를 쿼리로 사용하는 방식도 가능하지만,
+            #      임베딩-임베딩 직접 비교가 더 정확한 유사도 계산을 제공함
             resume_vector = resumes_collection.get(
                 ids=[str(resume_id)], include=["embeddings"]
             )
-
-            # 임베딩 검증 (numpy 배열 대응)
             embeddings = resume_vector.get("embeddings") if resume_vector else None
-            if embeddings is None or (
-                hasattr(embeddings, "__len__") and len(embeddings) == 0
+
+            vector_scores = {}  # posting_id -> similarity_score
+            if embeddings and (
+                not hasattr(embeddings, "__len__") or len(embeddings) > 0
             ):
-                logger.warning(f"No embedding found for user {user_id}")
+                # 메타데이터 필터 구성 (경력 범위)
+                where_filter = None
+                if user_career_years > 0:
+                    # 경력이 사용자의 경력 연차 범위에 맞는 공고만 필터링
+                    # career_min <= user_career_years <= career_max
+                    # ChromaDB where 필터는 $gte, $lte 등을 지원
+                    where_filter = {
+                        "$and": [
+                            {"career_min": {"$lte": user_career_years}},
+                            {"career_max": {"$gte": user_career_years}},
+                        ]
+                    }
+
+                # 이력서 임베딩 벡터를 쿼리로 사용하여 유사한 공고 검색
+                # 유사도 임계값 적용 (0.7 = 70% 유사도 이상)
+                query_results = vector_db_client.query_by_embedding(
+                    collection=job_postings_collection,
+                    query_embeddings=embeddings,
+                    n_results=50,
+                    min_similarity=0.7,  # 최소 70% 유사도
+                    where=where_filter,  # 메타데이터 필터
+                )
+                if query_results and query_results.get("ids"):
+                    vector_ids = query_results["ids"][0]
+                    distances = (
+                        query_results.get("distances", [[]])[0]
+                        if query_results.get("distances")
+                        else []
+                    )
+
+                    # distance를 similarity로 변환 (distance: 0=유사, 2=다름)
+                    # similarity = 1 - (distance / 2)
+                    for idx, pid in enumerate(vector_ids):
+                        posting_id = int(pid)
+                        if idx < len(distances):
+                            distance = distances[idx]
+                            similarity = 1 - (distance / 2.0)  # 0-1 범위로 변환
+                            vector_scores[posting_id] = similarity
+                            candidate_posting_scores[posting_id] = (similarity, 0)
+
+                    logger.info(
+                        f"Vector search found {len(vector_ids)} candidates (similarity >= 0.7)"
+                    )
+
+            # [Graph Search] Neo4j에서 스킬 기반 공고 조회 (50개)
+            # 사용자의 스킬을 요구하는 공고를 직접 조회하여 Vector 검색의 누락을 보완
+            graph_ids = RecommendationService._get_postings_by_skills(
+                user_skills, limit=50
+            )
+            logger.info(f"Graph search found {len(graph_ids)} candidates")
+
+            # Graph 검색 결과도 candidate에 추가 (벡터 점수 없으면 0.5 기본값)
+            for posting_id in graph_ids:
+                if posting_id not in candidate_posting_scores:
+                    candidate_posting_scores[posting_id] = (0.5, 0)  # 기본 벡터 점수
+
+            if not candidate_posting_scores:
+                logger.info(f"No candidates found for user {user_id}")
                 return []
 
-            # 유사한 공고 50개 조회
-            query_results = job_postings_collection.query(
-                query_embeddings=embeddings, n_results=50
+            # 3. 스킬 매칭 점수 계산 및 재랭킹
+            # 각 후보에 대해 스킬 매칭 수를 계산하고, 벡터 점수와 결합
+            skill_match_scores = RecommendationService._calculate_skill_match_scores(
+                list(candidate_posting_scores.keys()), user_skills
             )
 
-            # 결과 검증 (numpy 배열 대응)
-            result_ids = query_results.get("ids") if query_results else None
-            if result_ids is None or (
-                hasattr(result_ids, "__len__") and len(result_ids) == 0
-            ):
-                logger.info(f"No job postings found for user {user_id}")
-                return []
+            # 벡터 점수와 스킬 매칭 점수를 결합하여 재랭킹
+            # 점수 = 벡터 유사도 (0.6) + 스킬 매칭 비율 (0.4)
+            ranked_postings = []
+            for posting_id, (vector_score, _) in candidate_posting_scores.items():
+                skill_match_count = skill_match_scores.get(posting_id, 0)
+                # 스킬 매칭 비율 계산 (임의로 최대 스킬 수를 10개로 가정)
+                # 실제로는 공고의 전체 스킬 수를 사용하는 것이 좋지만, 여기서는 단순화
+                max_skills = max(len(user_skills), 10)
+                skill_match_ratio = min(skill_match_count / max_skills, 1.0)
 
-            candidate_posting_ids = [int(pid) for pid in result_ids[0]]
+                # 하이브리드 점수 계산
+                hybrid_score = (vector_score * 0.6) + (skill_match_ratio * 0.4)
+                ranked_postings.append((posting_id, hybrid_score, skill_match_count))
 
-            # 3. Neo4j로 스킬 그래프 매칭하여 100개로 정제
-            matched_postings = RecommendationService._filter_by_skill_graph(
-                candidate_posting_ids, user_skills
-            )[:limit]
+            # 하이브리드 점수 기준 내림차순 정렬
+            ranked_postings.sort(key=lambda x: x[1], reverse=True)
+
+            # 상위 limit개 선택
+            matched_postings = [pid for pid, _, _ in ranked_postings[:limit]]
 
             if not matched_postings:
                 logger.info(f"No skill-matched postings for user {user_id}")
@@ -100,22 +171,42 @@ class RecommendationService:
             # 4. 각 공고에 대해 match_score 계산 및 match_reason 생성
             recommendations = []
 
+            # 재랭킹 결과에서 점수 정보 추출 (RAG 컨텍스트용)
+            posting_hybrid_scores = {
+                pid: score for pid, score, _ in ranked_postings[:limit]
+            }
+            posting_skill_counts = {
+                pid: count for pid, _, count in ranked_postings[:limit]
+            }
+
             # LLM 평가가 필요한 공고 수집
             postings_to_evaluate = []
+            search_contexts = []  # 각 공고의 검색 컨텍스트
             if prompt_id:
                 for posting_id in matched_postings:
                     try:
                         posting = JobPosting.objects.get(posting_id=posting_id)
                         postings_to_evaluate.append(posting)
+                        # 검색 컨텍스트 정보 수집
+                        hybrid_score = posting_hybrid_scores.get(posting_id, 0.0)
+                        skill_count = posting_skill_counts.get(posting_id, 0)
+                        vector_score = vector_scores.get(posting_id, 0.0)
+                        search_contexts.append(
+                            {
+                                "hybrid_score": hybrid_score,
+                                "vector_similarity": vector_score,
+                                "skill_matches": skill_count,
+                            }
+                        )
                     except JobPosting.DoesNotExist:
                         continue
 
-                # 일괄 평가 수행
+                # 일괄 평가 수행 (RAG 패턴: 검색 컨텍스트 포함)
                 if postings_to_evaluate:
                     prompt = RecommendationPrompt.objects.get(id=prompt_id)
                     batch_results = (
                         RecommendationService._evaluate_match_batch_with_llm(
-                            postings_to_evaluate, resume, prompt
+                            postings_to_evaluate, resume, prompt, search_contexts
                         )
                     )
 
@@ -191,6 +282,53 @@ class RecommendationService:
             return []
 
     @staticmethod
+    def _calculate_skill_match_scores(
+        posting_ids: List[int], user_skills: set
+    ) -> Dict[int, int]:
+        """
+        각 공고에 대한 스킬 매칭 점수 계산
+
+        Args:
+            posting_ids: 후보 공고 ID 리스트
+            user_skills: 사용자 스킬 집합
+
+        Returns:
+            posting_id -> 스킬 매칭 수 딕셔너리
+        """
+        if not user_skills:
+            return {pid: 0 for pid in posting_ids}
+
+        skill_scores = {}
+
+        for posting_id in posting_ids:
+            try:
+                # Neo4j에서 공고의 필수 스킬 조회
+                query = """
+                MATCH (jp:JobPosting {posting_id: $posting_id})-[:REQUIRES_SKILL]->(skill:Skill)
+                RETURN skill.name AS skill_name
+                """
+
+                result = graph_db_client.execute_query(
+                    query, {"posting_id": posting_id}
+                )
+
+                if result:
+                    posting_skills = {record["skill_name"] for record in result}
+                    match_count = len(user_skills & posting_skills)
+                    skill_scores[posting_id] = match_count
+                else:
+                    skill_scores[posting_id] = 0
+            except Exception as e:
+                logger.warning(
+                    f"Error querying skills for posting {posting_id}: {e}",
+                    exc_info=True,
+                )
+                skill_scores[posting_id] = 0
+                continue
+
+        return skill_scores
+
+    @staticmethod
     def _filter_by_skill_graph(posting_ids: List[int], user_skills: set) -> List[int]:
         """
         Neo4j 그래프를 사용하여 스킬 매칭되는 공고 필터링
@@ -235,6 +373,41 @@ class RecommendationService:
         # 스킬 매칭 수 기준 내림차순 정렬
         matched_postings.sort(key=lambda x: x[1], reverse=True)
         return [posting_id for posting_id, _ in matched_postings]
+
+    @staticmethod
+    def _get_postings_by_skills(user_skills: set, limit: int = 50) -> List[int]:
+        """
+        사용자 스킬을 포함하는 공고 조회 (Graph DB)
+
+        Args:
+            user_skills: 사용자 스킬 집합
+            limit: 조회할 공고 수
+
+        Returns:
+            공고 ID 리스트
+        """
+        if not user_skills:
+            return []
+
+        try:
+            # 사용자의 스킬 중 하나라도 요구하는 공고 조회 (최신순)
+            query = """
+            MATCH (jp:JobPosting)-[:REQUIRES_SKILL]->(skill:Skill)
+            WHERE skill.name IN $user_skills
+            RETURN jp.posting_id AS posting_id, count(skill) as match_count
+            ORDER BY match_count DESC, jp.posting_id DESC
+            LIMIT $limit
+            """
+
+            result = graph_db_client.execute_query(
+                query, {"user_skills": list(user_skills), "limit": limit}
+            )
+
+            return [record["posting_id"] for record in result]
+
+        except Exception as e:
+            logger.warning(f"Error querying postings by skills: {e}", exc_info=True)
+            return []
 
     @staticmethod
     def _calculate_match_score_and_reason(
@@ -310,15 +483,20 @@ class RecommendationService:
 
     @staticmethod
     def _evaluate_match_batch_with_llm(
-        postings: List[JobPosting], resume: Resume, prompt: RecommendationPrompt
+        postings: List[JobPosting],
+        resume: Resume,
+        prompt: RecommendationPrompt,
+        search_contexts: Optional[List[Dict]] = None,
     ) -> List[Dict]:
         """
         LLM을 사용하여 여러 공고와 이력서 간의 매칭 평가 (일괄 처리)
+        RAG 패턴: 검색 컨텍스트(유사도 점수, 스킬 매칭 정보)를 포함
 
         Args:
             postings: 채용 공고 객체 리스트
             resume: 이력서 객체
             prompt: 사용할 프롬프트 객체
+            search_contexts: 검색 컨텍스트 리스트 (각 공고의 유사도 점수, 스킬 매칭 수 등)
 
         Returns:
             평가 결과 리스트 [{"score": int, "reason": str}, ...]
@@ -343,9 +521,29 @@ class RecommendationService:
             resume_summary = resume.experience_summary or "이력서 내용 없음"
             skills = ", ".join(resume.analysis_result.get("skills", []))
 
-            # 공고 목록 요약
+            # 공고 목록 요약 (RAG: 검색 컨텍스트 포함)
+            # 배치 크기 제한으로 토큰 수 제어 (10개씩 처리)
+            max_batch_size = 10
+            if len(postings) > max_batch_size:
+                logger.warning(
+                    f"Too many postings ({len(postings)}), limiting to {max_batch_size} for LLM evaluation"
+                )
+                postings = postings[:max_batch_size]
+                if search_contexts:
+                    search_contexts = search_contexts[:max_batch_size]
+
             jobs_text = ""
             for idx, posting in enumerate(postings):
+                context_info = ""
+                if search_contexts and idx < len(search_contexts):
+                    ctx = search_contexts[idx]
+                    context_info = f"""
+                [Search Context - 이 공고는 다음 검색 기준으로 선별되었습니다]
+                - 벡터 유사도 점수: {ctx.get('vector_similarity', 0):.2f}
+                - 스킬 매칭 수: {ctx.get('skill_matches', 0)}개
+                - 하이브리드 점수: {ctx.get('hybrid_score', 0):.2f}
+                """
+
                 jobs_text += f"""
                 [Job {idx+1}]
                 ID: {posting.posting_id}
@@ -353,11 +551,11 @@ class RecommendationService:
                 Position: {posting.position}
                 Main Tasks: {posting.main_tasks}
                 Requirements: {posting.requirements}
-                Preferred: {posting.preferred_points}
+                Preferred: {posting.preferred_points}{context_info}
                 -------------------
                 """
 
-            # 프롬프트 구성
+            # 프롬프트 구성 (RAG 패턴: 검색 컨텍스트 포함)
             full_prompt = f"""
             {prompt.content}
 
@@ -365,7 +563,7 @@ class RecommendationService:
             {resume_summary}
             Skills: {skills}
 
-            [Job Postings]
+            [Job Postings - 벡터 유사도 검색 및 스킬 그래프 매칭을 통해 선별된 후보들]
             {jobs_text}
 
             Based on the resume, evaluate the candidate's fit for EACH job posting above.
@@ -388,9 +586,9 @@ class RecommendationService:
             ]
             """
 
-            # 재시도 로직
+            # LLM 호출 및 JSON 파싱 (재시도 로직 포함)
             max_retries = 3
-            response = None
+            results = None
 
             for attempt in range(max_retries):
                 try:
@@ -402,7 +600,42 @@ class RecommendationService:
                             max_output_tokens=2000,  # 토큰 수 증가
                         ),
                     )
-                    break
+
+                    # JSON 파싱
+                    result_text = response.text.strip()
+                    result_text = re.sub(
+                        r"^```json\s*|\s*```$", "", result_text, flags=re.MULTILINE
+                    )
+                    results = json.loads(result_text)
+
+                    # 결과 개수 검증 및 보정
+                    if len(results) != len(postings):
+                        logger.warning(
+                            f"Mismatch in batch results: expected {len(postings)}, got {len(results)}"
+                        )
+                        # 부족한 경우 기본값 채움
+                        while len(results) < len(postings):
+                            results.append({"score": 50, "reason": "분석 결과 누락"})
+                        # 넘치는 경우 자름
+                        results = results[: len(postings)]
+
+                    break  # 파싱 성공 시 루프 종료
+
+                except (json.JSONDecodeError, KeyError, ValueError) as e:
+                    if attempt < max_retries - 1:
+                        logger.warning(
+                            f"JSON 파싱 실패 (시도 {attempt + 1}/{max_retries}): {e}. 재시도합니다."
+                        )
+                        continue
+                    else:
+                        logger.error(f"JSON 파싱 최종 실패: {e}")
+                        # 최종 실패 시 기본값 반환
+                        results = [
+                            {"score": 50, "reason": "LLM 응답 파싱 실패"}
+                            for _ in postings
+                        ]
+                        break
+
                 except ClientError as e:
                     if e.code == 429:
                         if attempt < max_retries - 1:
@@ -414,22 +647,9 @@ class RecommendationService:
                             continue
                     raise e
 
-            result_text = response.text.strip()
-            result_text = re.sub(
-                r"^```json\s*|\s*```$", "", result_text, flags=re.MULTILINE
-            )
-            results = json.loads(result_text)
-
-            # 결과 개수 검증 및 보정
-            if len(results) != len(postings):
-                logger.warning(
-                    f"Mismatch in batch results: expected {len(postings)}, got {len(results)}"
-                )
-                # 부족한 경우 기본값 채움
-                while len(results) < len(postings):
-                    results.append({"score": 50, "reason": "분석 결과 누락"})
-                # 넘치는 경우 자름
-                results = results[: len(postings)]
+            # 파싱된 결과가 없으면 기본값 사용
+            if not results:
+                results = [{"score": 50, "reason": "LLM 분석 실패"} for _ in postings]
 
             return results
 

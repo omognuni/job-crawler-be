@@ -10,7 +10,7 @@ The `common` app provides shared utility services for other applications within 
     *   Crucial for establishing and leveraging skill-based relationships in the recommendation system.
 *   **Vector Database Client (`vector_db.py`):**
     *   Manages connections and interactions with a ChromaDB vector database.
-    *   Utilizes a Sentence Transformer model ("all-MiniLM-L6-v2") to generate embeddings for text data.
+    *   Utilizes a Sentence Transformer model ("paraphrase-multilingual-MiniLM-L12-v2") to generate embeddings for text data.
     *   Provides functionalities for creating/retrieving collections, upserting documents (text content, metadata, IDs), and performing similarity searches based on vector embeddings.
     *   Essential for semantic search and vector-based recommendation aspects.
 *   **Singleton Instances:** Both `GraphDBClient` and `VectorDB` are implemented as singletons (`graph_db_client`, `vector_db_client`) to ensure efficient resource management and consistent configuration across the application.

@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 
 @shared_task(bind=True, max_retries=3)
-def process_resume(self, resume_id: int):
+def process_resume(self, resume_id: int, force_reindex: bool = False):
     """
     이력서를 처리하는 Celery 태스크
 
@@ -21,14 +21,16 @@ def process_resume(self, resume_id: int):
 
     Args:
         resume_id: Resume ID
-        reindex: 강제 재인덱싱 여부
+        force_reindex: 강제 재임베딩 여부 (True면 LLM 분석 생략, 임베딩만 수행)
 
     Returns:
         dict: 처리 결과
     """
     try:
         # ResumeService에 위임
-        result = ResumeService.process_resume_sync(resume_id)
+        result = ResumeService.process_resume_sync(
+            resume_id=resume_id, force_reindex=force_reindex
+        )
 
         if not result.success:
             # 처리 실패 시 재시도

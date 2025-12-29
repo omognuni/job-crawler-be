@@ -87,8 +87,12 @@ class TestRecommendationService:
     def test_get_recommendations_success(self, mock_graph_db, mock_vector_db):
         """추천 생성 성공"""
         # Given
+        from django.contrib.auth import get_user_model
+
+        User = get_user_model()
+        user = User.objects.create_user(username="testuser", password="password")
         resume = Resume.objects.create(
-            user_id=1,
+            user_id=user.id,
             content="Backend Developer",
             analysis_result={
                 "skills": ["Python", "Django"],
@@ -126,13 +130,18 @@ class TestRecommendationService:
         mock_jobs_collection.query.return_value = {"ids": [["1"]]}
 
         # Mock Neo4j
-        mock_graph_db.execute_query.return_value = [
-            {"skill_name": "Python"},
-            {"skill_name": "Django"},
+        # 1. _get_postings_by_skills 호출 결과
+        # 2. _filter_by_skill_graph 내부 호출 결과 (posting_id=1)
+        mock_graph_db.execute_query.side_effect = [
+            [{"posting_id": 1}],  # _get_postings_by_skills
+            [
+                {"skill_name": "Python"},
+                {"skill_name": "Django"},
+            ],  # _filter_by_skill_graph
         ]
 
         # When
-        recommendations = RecommendationService.get_recommendations(1, limit=10)
+        recommendations = RecommendationService.get_recommendations(resume.id, limit=10)
 
         # Then
         assert len(recommendations) > 0

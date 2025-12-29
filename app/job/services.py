@@ -170,12 +170,38 @@ class JobService:
                     f"Required={len(skills_required)}, Preferred='{skills_preferred[:50]}...'"
                 )
 
-            # 3. 임베딩 텍스트 생성 (노이즈 제거)
-            embedding_text = f"""
-Position: {job_posting.position or 'N/A'}
-Main Tasks: {job_posting.main_tasks or 'N/A'}
-Requirements: {job_posting.requirements or 'N/A'}
-Preferred Points: {job_posting.preferred_points or 'N/A'}
+            # 3. 임베딩 텍스트 생성 (스킬 정보 및 구조화된 필드 포함)
+            # 스킬 정보를 자연어로 변환
+            skills_required_text = (
+                ", ".join(skills_required) if skills_required else "없음"
+            )
+
+            # 구조화된 필드들을 의미 있는 텍스트로 변환
+            career_text = (
+                f"{job_posting.career_min}년 ~ {job_posting.career_max}년"
+                if job_posting.career_min and job_posting.career_max
+                else "경력 무관"
+            )
+            location_text = f"{job_posting.location}" + (
+                f" ({job_posting.district})" if job_posting.district else ""
+            )
+
+            embedding_text = f"""포지션: {job_posting.position or 'N/A'}
+
+주요 업무:
+{job_posting.main_tasks or 'N/A'}
+
+자격 요건:
+{job_posting.requirements or 'N/A'}
+
+우대 사항:
+{job_posting.preferred_points or 'N/A'}
+
+필수 기술 스택: {skills_required_text}
+
+경력 범위: {career_text}
+지역: {location_text}
+고용 형태: {job_posting.employment_type or 'N/A'}
             """.strip()
 
             # 4. ChromaDB에 upsert
