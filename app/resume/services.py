@@ -150,6 +150,7 @@ class ResumeService:
         """
         # 스킬 추출 (LLM-Free)
         skills = SkillExtractionService.extract_skills(content)
+        inferred_position = ResumeService._infer_position_from_skills(skills)
 
         # LLM 호출
         api_key = os.getenv("GOOGLE_API_KEY")
@@ -157,6 +158,7 @@ class ResumeService:
             logger.warning("Google API key not found - using fallback")
             return ResumeAnalysisResultDTO(
                 skills=skills,
+                position=inferred_position,
                 career_years=0,
                 strengths="API 키 미설정으로 분석 불가",
                 experience_summary=f"보유 스킬: {', '.join(skills[:10])}",
@@ -197,9 +199,15 @@ class ResumeService:
    - 예: "Python 및 Django 기반의 대용량 트래픽 처리 백엔드 개발자...", "C++ 및 Redis를 활용한 고성능 트레이딩 시스템 개발자..."
    - 다양한 직무 가능성을 열어두고 풍부한 키워드를 포함하세요.
 
+4. position: 이 지원자에게 가장 어울리는 포지션을 추천하세요.
+    - 지원자의 사용 언어, 프레임워크, 경험을 보고 판단
+    - 추천할 만한 포지션이 없을 경우 빈 문자열
+    - 예: "백엔드 개발자"
+
 반드시 다음 JSON 형식으로만 응답하세요 (다른 텍스트 없이 JSON만):
 {{
   "career_years": 숫자,
+  "position": "포지션",
   "strengths": "강점 설명",
   "experience_summary": "가상 채용 공고 내용"
 }}
@@ -248,8 +256,16 @@ class ResumeService:
             if not result:
                 raise ValueError("LLM 응답 파싱 실패: 결과가 없습니다.")
 
+            position_raw = result.get("position", "")
+            if not isinstance(position_raw, str):
+                position_raw = ""
+            position = position_raw.strip()
+            if not position:
+                position = inferred_position
+
             return ResumeAnalysisResultDTO(
                 skills=skills,
+                position=position,
                 career_years=int(result.get("career_years", 0)),
                 strengths=result.get("strengths", "분석 불가"),
                 experience_summary=result.get(
@@ -263,6 +279,7 @@ class ResumeService:
             # Fallback
             return ResumeAnalysisResultDTO(
                 skills=skills,
+                position=inferred_position,
                 career_years=0,
                 strengths=(
                     f"{', '.join(skills[:3])} 중심 경험"
@@ -271,6 +288,110 @@ class ResumeService:
                 ),
                 experience_summary=f"보유 스킬: {', '.join(skills[:10])}",
             )
+
+    @staticmethod
+    def _infer_position_from_skills(skills: List[str]) -> str:
+        """
+        스킬 목록을 기반으로 추천 포지션을 간단히 추론합니다.
+
+        - LLM이 실패하거나 position을 비워서 반환하는 경우를 보완하기 위한 규칙 기반 추론입니다.
+        - 정확도보다 "빈 값 방지"와 "설명 가능성"을 우선합니다.
+
+        Args:
+            skills: 추출된 스킬 목록
+
+        Returns:
+            추천 포지션 (없으면 빈 문자열)
+        """
+        if not skills:
+            return ""
+
+        skill_set = set(skills)
+
+        backend = {
+            "Django",
+            "Flask",
+            "FastAPI",
+            "Spring",
+            "Spring Boot",
+            "NestJS",
+            "Express",
+            "Rails",
+            "Laravel",
+            "ASP.NET",
+            "PostgreSQL",
+            "MySQL",
+            "MongoDB",
+            "Redis",
+            "Kafka",
+            "RabbitMQ",
+            "REST API",
+            "GraphQL",
+        }
+        frontend = {
+            "React",
+            "Vue",
+            "Vue.js",
+            "Angular",
+            "Svelte",
+            "Next.js",
+            "Nuxt.js",
+            "JavaScript",
+            "TypeScript",
+        }
+        devops = {
+            "AWS",
+            "GCP",
+            "Azure",
+            "Docker",
+            "Kubernetes",
+            "Terraform",
+            "Ansible",
+            "Jenkins",
+            "GitHub Actions",
+            "GitLab CI",
+            "Prometheus",
+            "Grafana",
+        }
+        data_ml = {
+            "PyTorch",
+            "TensorFlow",
+            "scikit-learn",
+            "Pandas",
+            "NumPy",
+            "Spark",
+            "Hadoop",
+            "Airflow",
+            "MLflow",
+        }
+        mobile = {
+            "Android",
+            "iOS",
+            "Kotlin",
+            "Swift",
+            "React Native",
+            "Flutter",
+        }
+
+        # 우선순위: 가장 직관적인 매칭부터 (한 사람이 여러 분야 스킬을 가져도 빈 값 방지가 목적)
+        if skill_set & backend:
+            return "백엔드 개발자"
+        if skill_set & frontend:
+            return "프론트엔드 개발자"
+        if skill_set & data_ml:
+            return "데이터/머신러닝 엔지니어"
+        if skill_set & devops:
+            return "DevOps/인프라 엔지니어"
+        if skill_set & mobile:
+            return "모바일 앱 개발자"
+
+        # 언어 기반 마지막 보정
+        if {"Python", "Java", "Go", "C#", "C++"} & skill_set:
+            return "백엔드 개발자"
+        if {"JavaScript", "TypeScript"} & skill_set:
+            return "프론트엔드 개발자"
+
+        return ""
 
     @staticmethod
     def process_resume_sync(
@@ -314,11 +435,36 @@ class ResumeService:
             )
 
             if force_reindex:
-                # 강제 재인덱싱: 분석은 건너뛰고 임베딩만 수행
+                # if not resume.analysis_result or not resume.experience_summary:
                 logger.info(
-                    f"Force reindex requested for resume {resume_id}, skipping LLM analysis"
+                    f"Force reindex requested for resume {resume_id} but missing analysis; "
+                    f"running analysis to populate required fields"
                 )
-                analysis = None
+                analysis = ResumeService._analyze_resume_with_llm(resume.content)
+
+                resume.analysis_result = {
+                    "skills": analysis.skills,
+                    "position": analysis.position,
+                    "career_years": analysis.career_years,
+                    "strengths": analysis.strengths,
+                }
+                resume.experience_summary = analysis.experience_summary
+                resume.analyzed_at = timezone.now()
+                resume.save(
+                    update_fields=[
+                        "analysis_result",
+                        "experience_summary",
+                        "analyzed_at",
+                        "content_hash",
+                    ]
+                )
+                resume.refresh_from_db()
+                # else:
+                #     logger.info(
+                #         f"Force reindex requested for resume {resume_id}, skipping LLM analysis"
+                #     )
+                #     analysis = None
+
                 needs_embedding = True
             elif needs_analysis:
                 # LLM 분석 수행
@@ -330,6 +476,7 @@ class ResumeService:
                 # Resume 업데이트
                 resume.analysis_result = {
                     "skills": analysis.skills,
+                    "position": analysis.position,
                     "career_years": analysis.career_years,
                     "strengths": analysis.strengths,
                 }
@@ -371,12 +518,15 @@ class ResumeService:
             if analysis:
                 skills_count = len(analysis.skills)
                 career_years = analysis.career_years
+                position = analysis.position or ""
             elif resume.analysis_result:
                 skills_count = len(resume.analysis_result.get("skills", []))
                 career_years = resume.analysis_result.get("career_years", 0)
+                position = resume.analysis_result.get("position", "")
             else:
                 skills_count = 0
                 career_years = 0
+                position = ""
 
             return ProcessResumeResultDTO(
                 success=True,
@@ -384,6 +534,7 @@ class ResumeService:
                 user_id=user_id,
                 skills_count=skills_count,
                 career_years=career_years,
+                position=position,
             )
 
         except Exception as e:

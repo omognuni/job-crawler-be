@@ -27,11 +27,6 @@ class ResumeEmbeddingService:
         Returns:
             성공 여부
         """
-        experience_summary = resume.experience_summary
-
-        if not experience_summary or len(experience_summary) <= 10:
-            return False
-
         try:
             # 스킬 정보 추출
             skills = (
@@ -39,20 +34,32 @@ class ResumeEmbeddingService:
                 if resume.analysis_result
                 else []
             )
+            position = (
+                resume.analysis_result.get("position", "")
+                if resume.analysis_result
+                else ""
+            )
             skills_text = ", ".join(skills) if skills else "스킬 정보 없음"
+            position_text = f"포지션: {position}" if position else ""
 
             # 원본 content의 앞부분 추출 (최대 1000자)
             content_preview = resume.content[:1000] if resume.content else ""
+            experience_summary = resume.experience_summary or ""
 
             # 임베딩 텍스트 구성: 원본 일부 + LLM 요약 + 스킬 정보
             embedding_text = f"""이력서 원본:
-{content_preview}
+            {content_preview}
 
-경력 요약:
-{experience_summary}
+            경력 요약:
+            {experience_summary}
 
-보유 스킬: {skills_text}
-""".strip()
+            보유 스킬: {skills_text}
+            {position_text}
+            """.strip()
+
+            # 최소 길이 체크 (experience_summary가 비어도 content/skills 기반으로 임베딩 가능)
+            if len(embedding_text) <= 30:
+                return False
 
             collection = vector_db_client.get_or_create_collection("resumes")
             vector_db_client.upsert_documents(
@@ -66,6 +73,7 @@ class ResumeEmbeddingService:
                             else 0
                         ),
                         "skills_count": len(skills),
+                        "position": position,
                         "user_id": resume.user_id,
                     }
                 ],

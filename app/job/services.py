@@ -186,23 +186,19 @@ class JobService:
                 f" ({job_posting.district})" if job_posting.district else ""
             )
 
-            embedding_text = f"""포지션: {job_posting.position or 'N/A'}
-
-주요 업무:
-{job_posting.main_tasks or 'N/A'}
-
-자격 요건:
-{job_posting.requirements or 'N/A'}
-
-우대 사항:
-{job_posting.preferred_points or 'N/A'}
-
-필수 기술 스택: {skills_required_text}
-
-경력 범위: {career_text}
-지역: {location_text}
-고용 형태: {job_posting.employment_type or 'N/A'}
-            """.strip()
+            embedding_text = f"""
+                포지션: {job_posting.position or 'N/A'}
+                주요 업무:
+                {job_posting.main_tasks or 'N/A'}
+                자격 요건:
+                {job_posting.requirements or 'N/A'}
+                우대 사항:
+                {job_posting.preferred_points or 'N/A'}
+                필수 기술 스택: {skills_required_text}
+                경력 범위: {career_text}
+                지역: {location_text}
+                고용 형태: {job_posting.employment_type or 'N/A'}
+                """.strip()
 
             # 4. ChromaDB에 upsert
             if len(embedding_text) > 10:
@@ -217,6 +213,7 @@ class JobService:
                             {
                                 "company_name": job_posting.company_name or "",
                                 "location": job_posting.location or "",
+                                "position": job_posting.position or "",
                                 "employment_type": job_posting.employment_type or "",
                                 "career_min": job_posting.career_min,
                                 "career_max": job_posting.career_max,

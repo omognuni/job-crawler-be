@@ -45,8 +45,10 @@ class RecommendationService:
             # 1. Resume에서 스킬 및 경력 정보 추출
             resume = Resume.objects.get(id=resume_id)
             user_id = resume.user_id
-            user_skills = set(resume.analysis_result.get("skills", []))
-            user_career_years = resume.analysis_result.get("career_years", 0)
+            analysis_result = resume.analysis_result or {}
+            user_skills = set(analysis_result.get("skills", []))
+            user_career_years = analysis_result.get("career_years", 0)
+            user_position = (analysis_result.get("position") or "").strip()
 
             if not user_skills:
                 logger.warning(
@@ -75,9 +77,42 @@ class RecommendationService:
             embeddings = resume_vector.get("embeddings") if resume_vector else None
 
             vector_scores = {}  # posting_id -> similarity_score
-            if embeddings and (
-                not hasattr(embeddings, "__len__") or len(embeddings) > 0
-            ):
+            # embeddings는 numpy array일 수 있어 truthiness(not embeddings)가 예외를 낼 수 있음
+            embeddings_missing = embeddings is None
+            if not embeddings_missing:
+                try:
+                    embeddings_missing = len(embeddings) == 0
+                except Exception:
+                    # 길이 확인이 불가능한 타입이면 "있다"로 취급
+                    embeddings_missing = False
+
+            if embeddings_missing:
+                # 이력서 임베딩이 없으면 즉시 생성 시도 (Admin 재임베딩을 안 했거나 실패한 경우 대비)
+                try:
+                    from resume.embeddings import ResumeEmbeddingService
+
+                    ResumeEmbeddingService.embed_resume(resume)
+                    resume_vector = resumes_collection.get(
+                        ids=[str(resume_id)], include=["embeddings"]
+                    )
+                    embeddings = (
+                        resume_vector.get("embeddings") if resume_vector else None
+                    )
+                except Exception as e:
+                    logger.warning(
+                        f"Failed to ensure resume embedding for resume {resume_id}: {e}",
+                        exc_info=True,
+                    )
+
+            # embeddings truthiness를 쓰지 않고 안전하게 길이로 판단
+            embeddings_ready = embeddings is not None
+            if embeddings_ready:
+                try:
+                    embeddings_ready = len(embeddings) > 0
+                except Exception:
+                    embeddings_ready = True
+
+            if embeddings_ready:
                 # 메타데이터 필터 구성 (경력 범위)
                 where_filter = None
                 if user_career_years > 0:
@@ -100,6 +135,20 @@ class RecommendationService:
                     min_similarity=0.7,  # 최소 70% 유사도
                     where=where_filter,  # 메타데이터 필터
                 )
+                # 경력 필터가 너무 빡세서 결과가 없을 경우 필터 없이 재시도
+                if where_filter and (
+                    not query_results
+                    or not query_results.get("ids")
+                    or not query_results["ids"][0]
+                ):
+                    query_results = vector_db_client.query_by_embedding(
+                        collection=job_postings_collection,
+                        query_embeddings=embeddings,
+                        n_results=50,
+                        min_similarity=0.7,
+                        where=None,
+                    )
+
                 if query_results and query_results.get("ids"):
                     vector_ids = query_results["ids"][0]
                     distances = (
@@ -115,11 +164,44 @@ class RecommendationService:
                         if idx < len(distances):
                             distance = distances[idx]
                             similarity = 1 - (distance / 2.0)  # 0-1 범위로 변환
-                            vector_scores[posting_id] = similarity
-                            candidate_posting_scores[posting_id] = (similarity, 0)
+                        else:
+                            # distances가 없는 경우에도 후보를 버리지 않도록 기본값 부여
+                            similarity = 0.5
+                        vector_scores[posting_id] = similarity
+                        candidate_posting_scores[posting_id] = (similarity, 0)
 
                     logger.info(
                         f"Vector search found {len(vector_ids)} candidates (similarity >= 0.7)"
+                    )
+            else:
+                # 임베딩이 끝내 없으면 experience_summary/skills 기반 텍스트 검색으로 fallback
+                try:
+                    query_text = (
+                        resume.experience_summary
+                        or f"보유 스킬: {', '.join(sorted(user_skills))}"
+                    )
+                    query_results = vector_db_client.query(
+                        collection=job_postings_collection,
+                        query_texts=[query_text],
+                        n_results=50,
+                        min_similarity=0.7,
+                        where=None,
+                    )
+                    if (
+                        query_results
+                        and query_results.get("ids")
+                        and query_results["ids"][0]
+                    ):
+                        for pid in query_results["ids"][0]:
+                            posting_id = int(pid)
+                            candidate_posting_scores[posting_id] = (0.5, 0)
+                        logger.info(
+                            f"Vector text fallback found {len(query_results['ids'][0])} candidates"
+                        )
+                except Exception as e:
+                    logger.warning(
+                        f"Vector text fallback failed for resume {resume_id}: {e}",
+                        exc_info=True,
                     )
 
             # [Graph Search] Neo4j에서 스킬 기반 공고 조회 (50개)
@@ -144,8 +226,9 @@ class RecommendationService:
                 list(candidate_posting_scores.keys()), user_skills
             )
 
-            # 벡터 점수와 스킬 매칭 점수를 결합하여 재랭킹
-            # 점수 = 벡터 유사도 (0.6) + 스킬 매칭 비율 (0.4)
+            # 벡터 점수/스킬 매칭/포지션 유사도를 결합하여 재랭킹
+            # - user_position이 비어있으면(분석 미완료 등) 기존 점수식을 유지하여 호환성을 보장
+            # - user_position이 있으면 position 유사도를 가장 큰 가중치로 반영
             ranked_postings = []
             for posting_id, (vector_score, _) in candidate_posting_scores.items():
                 skill_match_count = skill_match_scores.get(posting_id, 0)
@@ -155,7 +238,32 @@ class RecommendationService:
                 skill_match_ratio = min(skill_match_count / max_skills, 1.0)
 
                 # 하이브리드 점수 계산
-                hybrid_score = (vector_score * 0.6) + (skill_match_ratio * 0.4)
+                if not user_position:
+                    hybrid_score = (vector_score * 0.6) + (skill_match_ratio * 0.4)
+                else:
+                    try:
+                        posting = JobPosting.objects.get(posting_id=posting_id)
+                        posting_position = posting.position
+                    except JobPosting.DoesNotExist:
+                        posting_position = ""
+
+                    position_similarity = (
+                        RecommendationService._calculate_position_similarity(
+                            user_position=user_position,
+                            job_position=posting_position,
+                        )
+                    )
+
+                    # position 유사도가 가장 높은 점수로 영향(가중치 최대)
+                    w_pos = 0.5
+                    w_vec = 0.3
+                    w_skill = 0.2
+                    hybrid_score = (
+                        (position_similarity * w_pos)
+                        + (vector_score * w_vec)
+                        + (skill_match_ratio * w_skill)
+                    )
+
                 ranked_postings.append((posting_id, hybrid_score, skill_match_count))
 
             # 하이브리드 점수 기준 내림차순 정렬
@@ -280,6 +388,83 @@ class RecommendationService:
                 exc_info=True,
             )
             return []
+
+    @staticmethod
+    def _normalize_position_text(text: str) -> str:
+        """
+        포지션 문자열 정규화 (간단/설명 가능한 규칙 기반)
+        """
+        if not text:
+            return ""
+        s = str(text).strip().lower()
+        # 공백/구분자 제거로 포함 매칭 정확도 개선
+        s = s.replace(" ", "")
+        s = s.replace("/", "")
+        s = s.replace("-", "")
+        s = s.replace("_", "")
+        return s
+
+    @staticmethod
+    def _map_position_to_category(normalized_text: str) -> str:
+        """
+        정규화된 포지션 문자열을 큰 카테고리로 매핑합니다.
+        """
+        if not normalized_text:
+            return ""
+
+        backend_keywords = ("backend", "백엔드", "server", "서버")
+        frontend_keywords = ("frontend", "프론트", "web", "웹")
+        devops_keywords = ("devops", "infra", "인프라", "sre", "platform", "플랫폼")
+        data_ml_keywords = (
+            "data",
+            "ml",
+            "ai",
+            "머신러닝",
+            "데이터",
+            "research",
+            "리서치",
+        )
+        mobile_keywords = ("android", "ios", "mobile", "모바일")
+
+        if any(k in normalized_text for k in backend_keywords):
+            return "backend"
+        if any(k in normalized_text for k in frontend_keywords):
+            return "frontend"
+        if any(k in normalized_text for k in devops_keywords):
+            return "devops"
+        if any(k in normalized_text for k in data_ml_keywords):
+            return "data_ml"
+        if any(k in normalized_text for k in mobile_keywords):
+            return "mobile"
+
+        return ""
+
+    @staticmethod
+    def _calculate_position_similarity(user_position: str, job_position: str) -> float:
+        """
+        이력서 포지션과 공고 포지션의 유사도를 0~1로 반환합니다.
+        - 카테고리 매핑이 되면 그것을 우선(설명 가능성/안정성)
+        - 매핑 실패 시 간단한 문자열 동일/포함 규칙으로 보정
+        """
+        if not user_position or not job_position:
+            return 0.0
+
+        u = RecommendationService._normalize_position_text(user_position)
+        j = RecommendationService._normalize_position_text(job_position)
+        if not u or not j:
+            return 0.0
+
+        u_cat = RecommendationService._map_position_to_category(u)
+        j_cat = RecommendationService._map_position_to_category(j)
+        if u_cat and j_cat:
+            return 1.0 if u_cat == j_cat else 0.0
+
+        if u == j:
+            return 1.0
+        if u in j or j in u:
+            return 0.8
+
+        return 0.0
 
     @staticmethod
     def _calculate_skill_match_scores(

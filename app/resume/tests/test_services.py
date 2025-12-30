@@ -110,6 +110,7 @@ class TestResumeService:
 
         # Then
         assert result.skills == ["Python", "Django"]
+        assert result.position == "백엔드 개발자"
         assert result.career_years == 0
         assert "API 키" in result.strengths
 
