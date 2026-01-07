@@ -20,9 +20,9 @@ User = get_user_model()
 class TestRecommendationPerformance:
     """추천 시스템 성능 테스트"""
 
-    @patch("recommendation.services.vector_db_client")
-    @patch("recommendation.services.graph_db_client")
-    def test_recommendation_response_time(self, mock_graph_db, mock_vector_db):
+    @patch("recommendation.services.vector_store")
+    @patch("recommendation.services.graph_store")
+    def test_recommendation_response_time(self, mock_graph_store, mock_vector_store):
         """추천 시스템 응답 시간 측정 (목표: < 500ms)"""
         # Given
         user = User.objects.create_user(username="perfuser", password="password")
@@ -54,32 +54,15 @@ class TestRecommendationPerformance:
             )
 
         # Mock ChromaDB
-        mock_resumes_collection = MagicMock()
-        mock_jobs_collection = MagicMock()
-
-        mock_vector_db.get_or_create_collection.side_effect = [
-            mock_resumes_collection,
-            mock_jobs_collection,
-        ]
-
-        mock_resumes_collection.get.return_value = {
-            "embeddings": [[0.1] * 384]  # Simulate embedding
-        }
-
-        mock_vector_db.query_by_embedding.return_value = {
+        mock_vector_store.get_embedding.return_value = [0.1] * 384
+        mock_vector_store.query_by_embedding.return_value = {
             "ids": [[str(i) for i in range(1, 21)]],
             "distances": [[0.2 for _ in range(1, 21)]],
         }
 
         # Mock Neo4j
-        def _neo4j_side_effect(query, parameters=None):
-            # postings by skills
-            if "RETURN jp.posting_id AS posting_id" in (query or ""):
-                return [{"posting_id": i} for i in range(1, 21)]
-            # skills for posting
-            return [{"skill_name": "Python"}, {"skill_name": "Django"}]
-
-        mock_graph_db.execute_query.side_effect = _neo4j_side_effect
+        mock_graph_store.get_postings_by_skills.return_value = list(range(1, 21))
+        mock_graph_store.get_required_skills.return_value = {"Python", "Django"}
 
         # When
         start_time = time.time()

@@ -34,3 +34,25 @@ class Neo4jGraphStore:
         """
         result = graph_db_client.execute_query(query, {"posting_id": posting_id})
         return {record["skill_name"] for record in result} if result else set()
+
+    def get_postings_by_skills(
+        self, *, user_skills: set[str], limit: int = 50
+    ) -> list[int]:
+        if not user_skills:
+            return []
+        query = """
+        MATCH (jp:JobPosting)-[:REQUIRES_SKILL]->(skill:Skill)
+        WHERE skill.name IN $user_skills
+        RETURN jp.posting_id AS posting_id, count(skill) as match_count
+        ORDER BY match_count DESC, jp.posting_id DESC
+        LIMIT $limit
+        """
+        result = graph_db_client.execute_query(
+            query, {"user_skills": list(user_skills), "limit": limit}
+        )
+        if not result:
+            return []
+        return [record["posting_id"] for record in result if "posting_id" in record]
+
+    def get_skill_statistics(self, *, skill_name: str | None = None) -> dict:
+        return graph_db_client.get_skill_statistics(skill_name)

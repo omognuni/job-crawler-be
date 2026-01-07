@@ -69,25 +69,18 @@ class TestRecommendationPrompt:
 
             # Mock vector/graph search to return our job posting
             with (
-                patch(
-                    "recommendation.services.vector_db_client.get_or_create_collection"
-                ) as mock_collection,
-                patch(
-                    "recommendation.services.vector_db_client.query_by_embedding"
-                ) as mock_qbe,
-                patch(
-                    "recommendation.services.RecommendationService._filter_by_skill_graph"
-                ) as mock_graph_filter,
+                patch("recommendation.services.vector_store") as mock_vector_store,
+                patch("recommendation.services.graph_store") as mock_graph_store,
             ):
-                mock_collection.return_value.get.return_value = {
-                    "embeddings": [[0.1] * 10]
-                }
-                mock_qbe.return_value = {
+                mock_vector_store.get_embedding.return_value = [0.1] * 10
+                mock_vector_store.query_by_embedding.return_value = {
                     "ids": [[str(self.job_posting.posting_id)]],
                     "distances": [[0.2]],
                 }
-                # Mock graph filter to return our posting ID
-                mock_graph_filter.return_value = [self.job_posting.posting_id]
+                mock_graph_store.get_postings_by_skills.return_value = [
+                    self.job_posting.posting_id
+                ]
+                mock_graph_store.get_required_skills.return_value = {"Python", "Django"}
 
                 url = reverse(
                     "recommendation-for-resume", kwargs={"resume_id": self.resume.id}
