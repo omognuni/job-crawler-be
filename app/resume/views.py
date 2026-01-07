@@ -6,6 +6,7 @@ Resume Views
 
 import logging
 
+from celery.result import AsyncResult
 from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -174,13 +175,73 @@ class ResumeViewSet(ModelViewSet):
         GET /api/v1/resumes/<resume_id>/analyze/
         """
         try:
-            process_resume.delay(pk).get()
-            resume = Resume.objects.get(pk=pk)
-            serializer = self.get_serializer(resume)
-            return Response(serializer.data)
+            resume = self.get_object()
+            async_result = process_resume.delay(int(resume.id))
+            # 상태 조회를 위해 task_id 저장
+            Resume.objects.filter(pk=resume.id).update(
+                last_process_task_id=async_result.id,
+            )
+            return Response(
+                {"task_id": async_result.id},
+                status=status.HTTP_202_ACCEPTED,
+            )
         except Exception as e:
             logger.error(f"Failed to analyze resume {pk}: {str(e)}", exc_info=True)
             return Response(
                 {"error": "Failed to analyze resume"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
+
+    @action(
+        methods=["GET"],
+        detail=True,
+        url_path="analyze-status",
+        url_name="analyze-status",
+    )
+    def analyze_status(self, request, pk=None, *args, **kwargs):
+        """
+        이력서 분석 상태 조회
+
+        GET /api/v1/resumes/<resume_id>/analyze-status/
+        """
+        resume = self.get_object()
+        task_id = resume.last_process_task_id
+        if not task_id:
+            return Response(
+                {"state": "not_started", "task_id": None},
+                status=status.HTTP_200_OK,
+            )
+
+        async_result = AsyncResult(task_id)
+        state = async_result.state
+
+        if state in {"PENDING", "RECEIVED", "STARTED", "RETRY"}:
+            return Response(
+                {"state": "processing", "task_id": task_id, "celery_state": state},
+                status=status.HTTP_200_OK,
+            )
+
+        if state == "SUCCESS":
+            # 최신 Resume 정보를 함께 반환
+            resume.refresh_from_db()
+            serializer = self.get_serializer(resume)
+            return Response(
+                {"state": "success", "task_id": task_id, "resume": serializer.data},
+                status=status.HTTP_200_OK,
+            )
+
+        # FAILURE 및 기타
+        error = None
+        try:
+            error = str(async_result.result) if async_result.result else None
+        except Exception:
+            error = None
+        return Response(
+            {
+                "state": "failure",
+                "task_id": task_id,
+                "celery_state": state,
+                "error": error,
+            },
+            status=status.HTTP_200_OK,
+        )

@@ -16,7 +16,7 @@ class TestRecommendationPrompt:
         self.user = User.objects.create_user(username="testuser", password="password")
         self.user_id = self.user.id
         self.resume = Resume.objects.create(
-            user_id=self.user_id,
+            user=self.user,
             content="Python Django Developer with 5 years of experience.",
             analysis_result={"skills": ["Python", "Django"], "career_years": 5},
             experience_summary="Experienced Python Developer",
@@ -59,11 +59,13 @@ class TestRecommendationPrompt:
 
         self.client.force_authenticate(user=self.user)
 
-        # Mock RecommendationService._evaluate_match_with_llm
+        # Mock RecommendationService._evaluate_match_batch_with_llm (외부 LLM 호출 방지)
         with patch(
-            "recommendation.services.RecommendationService._evaluate_match_with_llm"
+            "recommendation.services.RecommendationService._evaluate_match_batch_with_llm"
         ) as mock_llm:
-            mock_llm.return_value = (85, "Critical evaluation result")
+            mock_llm.return_value = [
+                {"score": 85, "reason": "Critical evaluation result"}
+            ]
 
             # Mock vector/graph search to return our job posting
             with (
@@ -71,14 +73,18 @@ class TestRecommendationPrompt:
                     "recommendation.services.vector_db_client.get_or_create_collection"
                 ) as mock_collection,
                 patch(
+                    "recommendation.services.vector_db_client.query_by_embedding"
+                ) as mock_qbe,
+                patch(
                     "recommendation.services.RecommendationService._filter_by_skill_graph"
                 ) as mock_graph_filter,
             ):
                 mock_collection.return_value.get.return_value = {
                     "embeddings": [[0.1] * 10]
                 }
-                mock_collection.return_value.query.return_value = {
-                    "ids": [[str(self.job_posting.posting_id)]]
+                mock_qbe.return_value = {
+                    "ids": [[str(self.job_posting.posting_id)]],
+                    "distances": [[0.2]],
                 }
                 # Mock graph filter to return our posting ID
                 mock_graph_filter.return_value = [self.job_posting.posting_id]

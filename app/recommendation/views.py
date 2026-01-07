@@ -20,6 +20,7 @@ from rest_framework.mixins import ListModelMixin
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.viewsets import GenericViewSet, ModelViewSet
+from resume.models import Resume
 
 logger = logging.getLogger(__name__)
 
@@ -199,6 +200,84 @@ class JobRecommendationViewSet(ModelViewSet):
         except Exception as e:
             logger.error(
                 f"Failed to generate recommendations for resume {resume_id}: {str(e)}",
+                exc_info=True,
+            )
+            return Response(
+                {"error": "Failed to generate recommendations"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+    @action(detail=False, methods=["get"], url_path="for-user/(?P<user_id>[0-9]+)")
+    def for_user(self, request, user_id=None):
+        """
+        특정 사용자를 위한 실시간 추천 생성
+
+        GET /api/v1/recommendations/for-user/<user_id>/?limit=10
+        """
+        start_time = time.time()
+
+        try:
+            user_id_int = int(user_id)
+            limit = int(request.query_params.get("limit", 10))
+            prompt_id = request.query_params.get("prompt_id")
+            if prompt_id:
+                prompt_id = int(prompt_id)
+        except ValueError:
+            return Response(
+                {"error": "user_id and limit must be integers"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # 대표 이력서 우선, 없으면 최신 이력서
+        resume = (
+            Resume.objects.filter(user_id=user_id_int, is_primary=True)
+            .order_by("-updated_at")
+            .first()
+        )
+        if not resume:
+            resume = (
+                Resume.objects.filter(user_id=user_id_int)
+                .order_by("-updated_at")
+                .first()
+            )
+        if not resume:
+            return Response(
+                {"error": "Resume not found for user"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        try:
+            recommendations = RecommendationService.get_recommendations(
+                resume.id, limit=limit, prompt_id=prompt_id
+            )
+
+            elapsed_time = time.time() - start_time
+            logger.info(
+                f"Generated {len(recommendations)} recommendations for user {user_id_int} "
+                f"(resume {resume.id}) in {elapsed_time:.3f} seconds"
+            )
+
+            # 서비스가 dict를 반환하는 경우(테스트/mocking)도 대응
+            if recommendations and isinstance(recommendations[0], dict):
+                return Response(
+                    {
+                        "user_id": user_id_int,
+                        "resume_id": resume.id,
+                        "recommendations": recommendations,
+                    }
+                )
+
+            serializer = self.get_serializer(recommendations, many=True)
+            return Response(
+                {
+                    "user_id": user_id_int,
+                    "resume_id": resume.id,
+                    "recommendations": serializer.data,
+                }
+            )
+        except Exception as e:
+            logger.error(
+                f"Failed to generate recommendations for user {user_id_int}: {str(e)}",
                 exc_info=True,
             )
             return Response(

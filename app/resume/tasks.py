@@ -7,7 +7,11 @@ Resume Celery Tasks
 import logging
 
 from celery import shared_task
-from resume.services import ResumeService
+from common.adapters.chroma_vector_store import ChromaVectorStore
+from common.adapters.django_resume_repo import DjangoResumeRepository
+from common.adapters.google_genai_resume_analyzer import GoogleGenAIResumeAnalyzer
+from common.application.result import Err, Ok
+from resume.application.usecases.process_resume import ProcessResumeUseCase
 
 logger = logging.getLogger(__name__)
 
@@ -27,17 +31,32 @@ def process_resume(self, resume_id: int, force_reindex: bool = False):
         dict: 처리 결과
     """
     try:
-        # ResumeService에 위임
-        result = ResumeService.process_resume_sync(
-            resume_id=resume_id, force_reindex=force_reindex
+        usecase = ProcessResumeUseCase(
+            resume_repo=DjangoResumeRepository(),
+            vector_store=ChromaVectorStore(),
+            resume_analyzer=GoogleGenAIResumeAnalyzer(),
         )
 
-        if not result.success:
-            # 처리 실패 시 재시도
-            error = Exception(result.error or "Unknown error")
-            raise self.retry(exc=error, countdown=60)
+        # force_reindex=True는 "분석 스킵"이 아니라 "임베딩 재생성" 목적이었는데,
+        # 현재 서비스 구현은 필드 누락 시 분석을 수행하는 등 정책이 섞여 있었습니다.
+        # 새 정책: force_reindex=True => 분석은 하지 않고 임베딩만 갱신(run_analysis=False)
+        # (필요하면 추후 옵션을 분리: force_analysis/force_embedding 등)
+        result = usecase.execute(
+            resume_id=int(resume_id),
+            run_analysis=not force_reindex,
+        )
 
-        return result.model_dump()
+        if isinstance(result, Ok):
+            return result.value.model_dump()
+
+        assert isinstance(result, Err)
+
+        # NOT_FOUND / VALIDATION_ERROR 는 재시도해도 의미가 없으므로 즉시 실패 반환
+        if result.code in {"NOT_FOUND", "VALIDATION_ERROR"}:
+            return {"success": False, "error": result.message}
+
+        # 그 외는 일시적 실패 가능성이 있어 재시도
+        raise self.retry(exc=Exception(result.message), countdown=60)
 
     except Exception as e:
         error_msg = f"Error processing resume {resume_id}: {str(e)}"

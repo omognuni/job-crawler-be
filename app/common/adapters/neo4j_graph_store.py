@@ -26,3 +26,11 @@ class Neo4jGraphStore:
             company_name=company_name,
             skills=skills_required,
         )
+
+    def get_required_skills(self, *, posting_id: int) -> set[str]:
+        query = """
+        MATCH (jp:JobPosting {posting_id: $posting_id})-[:REQUIRES_SKILL]->(skill:Skill)
+        RETURN skill.name AS skill_name
+        """
+        result = graph_db_client.execute_query(query, {"posting_id": posting_id})
+        return {record["skill_name"] for record in result} if result else set()

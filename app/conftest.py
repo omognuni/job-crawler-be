@@ -8,6 +8,16 @@ import pytest
 from celery import Celery
 
 
+@pytest.fixture(autouse=True)
+def _disable_auto_processing(settings):
+    """
+    테스트에서는 모델 save() 부수효과(자동 Celery 스케줄링)를 끕니다.
+    - 외부 시스템(Chroma/Neo4j/Redis)에 의존하지 않는 순수 테스트를 안정적으로 유지하기 위함.
+    """
+    settings.AUTO_PROCESS_RESUME_ON_SAVE = False
+    settings.AUTO_PROCESS_JOB_ON_SAVE = False
+
+
 @pytest.fixture(scope="session")
 def celery_config():
     """

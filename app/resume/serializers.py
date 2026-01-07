@@ -17,7 +17,14 @@ class ResumeSerializer(serializers.ModelSerializer):
             "content_hash",
             "analysis_result",
             "analyzed_at",
+            "last_process_task_id",
+            "last_process_task_updated_at",
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ["content_hash", "analyzed_at"]
+        read_only_fields = [
+            "content_hash",
+            "analyzed_at",
+            "last_process_task_id",
+            "last_process_task_updated_at",
+        ]

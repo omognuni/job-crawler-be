@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.db import models, transaction
 
 # Backward compatibility imports
@@ -44,8 +45,10 @@ class JobPosting(models.Model):
         # update_fields에 skills_* 필드가 포함된 경우 태스크 호출 스킵
         # (무한 루프 방지 - tasks.py에서 이미 스킬 업데이트 수행)
         update_fields = kwargs.get("update_fields")
-        should_process = update_fields is None or not set(update_fields).issubset(
-            {"skills_required", "skills_preferred"}
+        auto_enabled = getattr(settings, "AUTO_PROCESS_JOB_ON_SAVE", True)
+        should_process = auto_enabled and (
+            update_fields is None
+            or not set(update_fields).issubset({"skills_required", "skills_preferred"})
         )
 
         # 모델 저장

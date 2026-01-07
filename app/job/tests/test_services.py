@@ -125,11 +125,11 @@ class TestJobService:
         assert result is True
         assert not JobPosting.objects.filter(posting_id=4).exists()
 
-    @patch("job.services.vector_db_client")
-    @patch("job.services.graph_db_client")
-    @patch("job.services.SkillExtractionService")
+    @patch("job.services.Neo4jGraphStore")
+    @patch("job.services.ChromaVectorStore")
+    @patch("job.application.usecases.process_job_posting.SkillExtractionService")
     def test_process_job_posting_sync_success(
-        self, mock_skill_service, mock_graph_db, mock_vector_db
+        self, mock_skill_service, mock_vector_store, mock_graph_store
     ):
         """채용 공고 처리 (동기) 성공"""
         # Given
@@ -154,9 +154,9 @@ class TestJobService:
             "AWS preferred",
         )
 
-        # Mock vector DB
-        mock_collection = MagicMock()
-        mock_vector_db.get_or_create_collection.return_value = mock_collection
+        # Mock vector/graph
+        mock_vector_store.return_value.upsert_text.return_value = None
+        mock_graph_store.return_value.upsert_job_posting.return_value = None
 
         # When
         result = JobService.process_job_posting_sync(5)
@@ -170,8 +170,7 @@ class TestJobService:
         posting.refresh_from_db()
         assert posting.skills_required == ["Python", "Django"]
 
-    @patch("job.services.SkillExtractionService")
-    def test_process_job_posting_sync_not_found(self, mock_skill_service):
+    def test_process_job_posting_sync_not_found(self):
         """존재하지 않는 채용 공고 처리"""
         # When
         result = JobService.process_job_posting_sync(9999)

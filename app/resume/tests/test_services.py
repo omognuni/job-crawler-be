@@ -4,7 +4,7 @@ Tests for ResumeService
 이력서 비즈니스 로직 테스트
 """
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 from django.contrib.auth import get_user_model
@@ -95,7 +95,7 @@ class TestResumeService:
         assert result is True
         assert not Resume.objects.filter(id=resume.id).exists()
 
-    @patch("resume.services.os.getenv")
+    @patch("common.adapters.google_genai_resume_analyzer.os.getenv")
     @patch("resume.services.SkillExtractionService")
     def test_analyze_resume_with_llm_no_api_key(self, mock_skill_service, mock_getenv):
         """API 키 없이 이력서 분석 (Fallback)"""
@@ -114,11 +114,11 @@ class TestResumeService:
         assert result.career_years == 0
         assert "API 키" in result.strengths
 
-    @patch("resume.services.ResumeEmbeddingService")
-    @patch("resume.services.SkillExtractionService")
-    @patch("resume.services.os.getenv")
+    @patch("resume.services.ChromaVectorStore")
+    @patch("resume.application.usecases.process_resume.SkillExtractionService")
+    @patch("common.adapters.google_genai_resume_analyzer.os.getenv")
     def test_process_resume_sync_success(
-        self, mock_getenv, mock_skill_service, mock_embedding_service
+        self, mock_getenv, mock_skill_service, mock_vector_store
     ):
         """이력서 처리 (동기) 성공"""
         # Given
@@ -131,8 +131,8 @@ class TestResumeService:
         mock_getenv.return_value = None  # Fallback mode
         mock_skill_service.extract_skills.return_value = ["Python", "Django"]
 
-        # Mock embedding service
-        mock_embedding_service.embed_resume.return_value = True
+        # Mock vector store
+        mock_vector_store.return_value.upsert_text.return_value = None
 
         # When
         result = ResumeService.process_resume_sync(resume.id)

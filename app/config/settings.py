@@ -211,6 +211,10 @@ CELERY_TIMEZONE = TIME_ZONE
 CELERY_TASK_TRACK_STARTED = True
 CELERY_TASK_TIME_LIMIT = 30 * 60  # 30 minutes
 
+# Auto processing switches (mainly for tests)
+AUTO_PROCESS_RESUME_ON_SAVE = os.getenv("AUTO_PROCESS_RESUME_ON_SAVE", "True") == "True"
+AUTO_PROCESS_JOB_ON_SAVE = os.getenv("AUTO_PROCESS_JOB_ON_SAVE", "True") == "True"
+
 # Neo4j Configuration
 NEO4J_URI = os.getenv("NEO4J_URI", "bolt://neo4j:7687")
 NEO4J_USER = os.getenv("NEO4J_USER", "neo4j")

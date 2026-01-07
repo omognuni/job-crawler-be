@@ -89,6 +89,26 @@ class ProcessResumeUseCase:
                     "analyzed_content_hash",
                 ],
             )
+        else:
+            # 분석(LLM)을 실행하지 않더라도, 최소한 skills/position은 최신으로 유지해두는 편이
+            # 추천/검색 파이프라인의 견고함에 도움이 됩니다.
+            ar = (
+                resume.analysis_result
+                if isinstance(resume.analysis_result, dict)
+                else None
+            )
+            existing_skills = (ar or {}).get("skills", [])
+            existing_position = (ar or {}).get("position", "")
+
+            if content_changed_since_analysis or not existing_skills:
+                resume.analysis_result = {
+                    "skills": skills,
+                    "position": (existing_position or inferred_position),
+                    "career_years": (ar or {}).get("career_years", 0),
+                    "strengths": (ar or {}).get("strengths", ""),
+                }
+                # analyzed_content_hash는 "LLM 분석 시점"이므로 여기서는 갱신하지 않습니다.
+                self._resume_repo.save(resume, update_fields=["analysis_result"])
 
         # 2) 임베딩 갱신 (항상 수행: 벡터 검색 최신화 목적)
         embedding_text, metadata = build_resume_embedding_text(

@@ -8,9 +8,12 @@ import time
 from unittest.mock import MagicMock, patch
 
 import pytest
+from django.contrib.auth import get_user_model
 from job.models import JobPosting
 from recommendation.services import RecommendationService
 from resume.models import Resume
+
+User = get_user_model()
 
 
 @pytest.mark.django_db
@@ -22,8 +25,9 @@ class TestRecommendationPerformance:
     def test_recommendation_response_time(self, mock_graph_db, mock_vector_db):
         """추천 시스템 응답 시간 측정 (목표: < 500ms)"""
         # Given
+        user = User.objects.create_user(username="perfuser", password="password")
         resume = Resume.objects.create(
-            user_id=1,
+            user=user,
             content="Backend Developer with Python and Django experience",
             analysis_result={
                 "skills": ["Python", "Django", "PostgreSQL"],
@@ -62,19 +66,24 @@ class TestRecommendationPerformance:
             "embeddings": [[0.1] * 384]  # Simulate embedding
         }
 
-        mock_jobs_collection.query.return_value = {
-            "ids": [[str(i) for i in range(1, 21)]]
+        mock_vector_db.query_by_embedding.return_value = {
+            "ids": [[str(i) for i in range(1, 21)]],
+            "distances": [[0.2 for _ in range(1, 21)]],
         }
 
         # Mock Neo4j
-        mock_graph_db.execute_query.return_value = [
-            {"skill_name": "Python"},
-            {"skill_name": "Django"},
-        ]
+        def _neo4j_side_effect(query, parameters=None):
+            # postings by skills
+            if "RETURN jp.posting_id AS posting_id" in (query or ""):
+                return [{"posting_id": i} for i in range(1, 21)]
+            # skills for posting
+            return [{"skill_name": "Python"}, {"skill_name": "Django"}]
+
+        mock_graph_db.execute_query.side_effect = _neo4j_side_effect
 
         # When
         start_time = time.time()
-        recommendations = RecommendationService.get_recommendations(1, limit=10)
+        recommendations = RecommendationService.get_recommendations(resume.id, limit=10)
         elapsed_time = time.time() - start_time
 
         # Then

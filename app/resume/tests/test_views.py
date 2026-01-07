@@ -123,8 +123,7 @@ class TestResumeViewSet:
 
         # When
         response = self.client.get(f"/api/v1/resumes/{resume.id}/analyze/")
-        print(response.data)
 
         # Then
-        assert response.status_code == status.HTTP_200_OK
-        assert response.data["id"] == resume.id
+        assert response.status_code == status.HTTP_202_ACCEPTED
+        assert "task_id" in response.data

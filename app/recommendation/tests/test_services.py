@@ -92,7 +92,7 @@ class TestRecommendationService:
         User = get_user_model()
         user = User.objects.create_user(username="testuser", password="password")
         resume = Resume.objects.create(
-            user_id=user.id,
+            user=user,
             content="Backend Developer",
             analysis_result={
                 "skills": ["Python", "Django"],
@@ -126,8 +126,10 @@ class TestRecommendationService:
         ]
 
         mock_resumes_collection.get.return_value = {"embeddings": [[0.1, 0.2, 0.3]]}
-
-        mock_jobs_collection.query.return_value = {"ids": [["1"]]}
+        mock_vector_db.query_by_embedding.return_value = {
+            "ids": [["1"]],
+            "distances": [[0.2]],
+        }
 
         # Mock Neo4j
         # 1. _get_postings_by_skills 호출 결과
@@ -145,7 +147,7 @@ class TestRecommendationService:
 
         # Then
         assert len(recommendations) > 0
-        assert recommendations[0]["posting_id"] == 1
+        assert recommendations[0].job_posting_id == 1
 
     @patch("recommendation.services.vector_db_client")
     @patch("recommendation.services.graph_db_client")
@@ -162,7 +164,7 @@ class TestRecommendationService:
         User = get_user_model()
         user = User.objects.create_user(username="testuser_pos", password="password")
         resume = Resume.objects.create(
-            user_id=user.id,
+            user=user,
             content="Backend Developer",
             analysis_result={
                 "skills": ["Python", "Django"],
@@ -237,7 +239,7 @@ class TestRecommendationService:
         # Then
         assert len(recommendations) >= 2
         # 포지션이 백엔드로 매칭되는 posting_id=1이 먼저 와야 한다
-        assert recommendations[0]["posting_id"] == 1
+        assert recommendations[0].job_posting_id == 1
 
     def test_filter_by_skill_graph_empty_skills(self):
         """스킬이 없는 경우 필터링"""

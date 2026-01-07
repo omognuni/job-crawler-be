@@ -70,8 +70,11 @@ class TestJobRecommendationViewSet:
     def test_for_user_real_time_recommendations(self, mock_service):
         """실시간 추천 생성"""
         # Given
+        user2 = User.objects.create_user(
+            username="testuser2", email="test2@example.com", password="testpass123"
+        )
         Resume.objects.create(
-            user_id=2,
+            user=user2,
             content="Backend Developer",
             analysis_result={"skills": ["Python"], "career_years": 3},
         )
@@ -90,11 +93,11 @@ class TestJobRecommendationViewSet:
         ]
 
         # When
-        response = self.client.get("/api/v1/recommendations/for-user/2/")
+        response = self.client.get(f"/api/v1/recommendations/for-user/{user2.id}/")
 
         # Then
         assert response.status_code == status.HTTP_200_OK
-        assert response.data["user_id"] == 2
+        assert response.data["user_id"] == user2.id
         assert "recommendations" in response.data
 
     def test_create_recommendation(self):
