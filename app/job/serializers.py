@@ -10,6 +10,7 @@ class JobPostingSerializer(serializers.ModelSerializer):
             "url",
             "company_name",
             "position",
+            "category",
             "main_tasks",
             "requirements",
             "preferred_points",
