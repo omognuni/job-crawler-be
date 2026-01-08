@@ -10,13 +10,11 @@ Resume Service
 import logging
 from typing import Dict, List, Optional
 
-from common.adapters.chroma_vector_store import ChromaVectorStore
-from common.adapters.django_resume_repo import DjangoResumeRepository
 from common.adapters.google_genai_resume_analyzer import GoogleGenAIResumeAnalyzer
 from common.application.result import Err, Ok
 from django.db import transaction
+from resume.application.container import build_process_resume_usecase
 from resume.application.position_inference import infer_position_from_skills
-from resume.application.usecases.process_resume import ProcessResumeUseCase
 from resume.dtos import ProcessResumeResultDTO, ResumeAnalysisResultDTO
 from resume.models import Resume
 from skill.services import SkillExtractionService
@@ -176,11 +174,7 @@ class ResumeService:
         Returns:
             ProcessResumeResultDTO: 처리 결과
         """
-        usecase = ProcessResumeUseCase(
-            resume_repo=DjangoResumeRepository(),
-            vector_store=ChromaVectorStore(),
-            resume_analyzer=GoogleGenAIResumeAnalyzer(),
-        )
+        usecase = build_process_resume_usecase()
         result = usecase.execute(resume_id=resume_id, run_analysis=not force_reindex)
         if isinstance(result, Ok):
             return result.value

@@ -82,9 +82,12 @@ class TestRecommendationService:
         assert 0 < score < 100
         assert "필수 스킬" in reason
 
-    @patch("recommendation.services.vector_store")
-    @patch("recommendation.services.graph_store")
-    def test_get_recommendations_success(self, mock_graph_store, mock_vector_store):
+    @patch("recommendation.application.container.Neo4jGraphStore")
+    @patch("recommendation.application.container.ChromaVectorStore")
+    @patch("recommendation.application.container.GeminiRecommendationEvaluator")
+    def test_get_recommendations_success(
+        self, mock_eval_cls, mock_vector_cls, mock_graph_cls
+    ):
         """추천 생성 성공"""
         # Given
         from django.contrib.auth import get_user_model
@@ -117,15 +120,21 @@ class TestRecommendationService:
         )
 
         # Mock ChromaDB
-        mock_vector_store.get_embedding.return_value = [0.1, 0.2, 0.3]
-        mock_vector_store.query_by_embedding.return_value = {
+        mock_vector_cls.return_value.get_embedding.return_value = [0.1, 0.2, 0.3]
+        mock_vector_cls.return_value.query_by_embedding.return_value = {
             "ids": [["1"]],
             "distances": [[0.2]],
         }
 
         # Mock Neo4j
-        mock_graph_store.get_postings_by_skills.return_value = [1]
-        mock_graph_store.get_required_skills.return_value = {"Python", "Django"}
+        mock_graph_cls.return_value.get_postings_by_skills.return_value = [1]
+        mock_graph_cls.return_value.get_required_skills.return_value = {
+            "Python",
+            "Django",
+        }
+        mock_eval_cls.return_value.evaluate_batch.return_value = [
+            {"score": 50, "reason": "x"}
+        ]
 
         # When
         recommendations = RecommendationService.get_recommendations(resume.id, limit=10)
@@ -134,10 +143,11 @@ class TestRecommendationService:
         assert len(recommendations) > 0
         assert recommendations[0].job_posting_id == 1
 
-    @patch("recommendation.services.vector_store")
-    @patch("recommendation.services.graph_store")
+    @patch("recommendation.application.container.Neo4jGraphStore")
+    @patch("recommendation.application.container.ChromaVectorStore")
+    @patch("recommendation.application.container.GeminiRecommendationEvaluator")
     def test_get_recommendations_position_similarity_prioritized(
-        self, mock_graph_store, mock_vector_store
+        self, mock_eval_cls, mock_vector_cls, mock_graph_cls
     ):
         """
         포지션 유사도가 가장 큰 가중치로 반영되어,
@@ -191,23 +201,26 @@ class TestRecommendationService:
         )
 
         # Mock ChromaDB: 동일한 임베딩이 준비되어 있고, query는 두 공고를 반환
-        mock_vector_store.get_embedding.return_value = [0.1, 0.2, 0.3]
+        mock_vector_cls.return_value.get_embedding.return_value = [0.1, 0.2, 0.3]
 
         # query_by_embedding을 통해 2개 후보가 들어오도록
-        mock_vector_store.query_by_embedding.return_value = {
+        mock_vector_cls.return_value.query_by_embedding.return_value = {
             "ids": [["1", "2"]],
             "distances": [[0.2, 0.2]],  # 동일 distance -> 동일 vector_score
         }
 
         # Graph search도 2개 후보를 반환하도록
-        mock_graph_store.get_postings_by_skills.return_value = [2, 1]
+        mock_graph_cls.return_value.get_postings_by_skills.return_value = [2, 1]
 
         def _skills(pid: int):
             return {"Python", "Django"}
 
-        mock_graph_store.get_required_skills.side_effect = (
+        mock_graph_cls.return_value.get_required_skills.side_effect = (
             lambda *, posting_id: _skills(posting_id)
         )
+        mock_eval_cls.return_value.evaluate_batch.return_value = [
+            {"score": 50, "reason": "x"}
+        ]
 
         # When
         recommendations = RecommendationService.get_recommendations(resume.id, limit=10)

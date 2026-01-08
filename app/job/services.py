@@ -12,11 +12,8 @@ from job.models import JobPosting
 
 logger = logging.getLogger(__name__)
 
-from common.adapters.chroma_vector_store import ChromaVectorStore
-from common.adapters.django_job_repo import DjangoJobPostingRepository
-from common.adapters.neo4j_graph_store import Neo4jGraphStore
 from common.application.result import Err, Ok
-from job.application.usecases.process_job_posting import ProcessJobPostingUseCase
+from job.application.container import build_process_job_posting_usecase
 
 
 class JobService:
@@ -143,11 +140,7 @@ class JobService:
         Returns:
             처리 결과 딕셔너리
         """
-        usecase = ProcessJobPostingUseCase(
-            job_repo=DjangoJobPostingRepository(),
-            vector_store=ChromaVectorStore(),
-            graph_store=Neo4jGraphStore(),
-        )
+        usecase = build_process_job_posting_usecase()
         result = usecase.execute(posting_id=posting_id)
         if isinstance(result, Ok):
             return result.value

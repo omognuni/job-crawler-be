@@ -5,11 +5,8 @@ Celery 태스크: 채용 공고 처리
 import logging
 
 from celery import shared_task
-from common.adapters.chroma_vector_store import ChromaVectorStore
-from common.adapters.django_job_repo import DjangoJobPostingRepository
-from common.adapters.neo4j_graph_store import Neo4jGraphStore
 from common.application.result import Err, Ok
-from job.application.usecases.process_job_posting import ProcessJobPostingUseCase
+from job.application.container import build_process_job_posting_usecase
 
 logger = logging.getLogger(__name__)
 
@@ -30,11 +27,7 @@ def process_job_posting(self, posting_id: int, reindex: bool = False):
     """
     try:
         # reindex는 현재 로직 차이 없음(유지)
-        usecase = ProcessJobPostingUseCase(
-            job_repo=DjangoJobPostingRepository(),
-            vector_store=ChromaVectorStore(),
-            graph_store=Neo4jGraphStore(),
-        )
+        usecase = build_process_job_posting_usecase()
         result = usecase.execute(posting_id=int(posting_id))
 
         if isinstance(result, Ok):

@@ -125,8 +125,8 @@ class TestJobService:
         assert result is True
         assert not JobPosting.objects.filter(posting_id=4).exists()
 
-    @patch("job.services.Neo4jGraphStore")
-    @patch("job.services.ChromaVectorStore")
+    @patch("job.application.container.Neo4jGraphStore")
+    @patch("job.application.container.ChromaVectorStore")
     @patch("job.application.usecases.process_job_posting.SkillExtractionService")
     def test_process_job_posting_sync_success(
         self, mock_skill_service, mock_vector_store, mock_graph_store

@@ -20,9 +20,12 @@ User = get_user_model()
 class TestRecommendationPerformance:
     """추천 시스템 성능 테스트"""
 
-    @patch("recommendation.services.vector_store")
-    @patch("recommendation.services.graph_store")
-    def test_recommendation_response_time(self, mock_graph_store, mock_vector_store):
+    @patch("recommendation.application.container.Neo4jGraphStore")
+    @patch("recommendation.application.container.ChromaVectorStore")
+    @patch("recommendation.application.container.GeminiRecommendationEvaluator")
+    def test_recommendation_response_time(
+        self, mock_eval_cls, mock_vector_cls, mock_graph_cls
+    ):
         """추천 시스템 응답 시간 측정 (목표: < 500ms)"""
         # Given
         user = User.objects.create_user(username="perfuser", password="password")
@@ -54,15 +57,23 @@ class TestRecommendationPerformance:
             )
 
         # Mock ChromaDB
-        mock_vector_store.get_embedding.return_value = [0.1] * 384
-        mock_vector_store.query_by_embedding.return_value = {
+        mock_vector_cls.return_value.get_embedding.return_value = [0.1] * 384
+        mock_vector_cls.return_value.query_by_embedding.return_value = {
             "ids": [[str(i) for i in range(1, 21)]],
             "distances": [[0.2 for _ in range(1, 21)]],
         }
 
         # Mock Neo4j
-        mock_graph_store.get_postings_by_skills.return_value = list(range(1, 21))
-        mock_graph_store.get_required_skills.return_value = {"Python", "Django"}
+        mock_graph_cls.return_value.get_postings_by_skills.return_value = list(
+            range(1, 21)
+        )
+        mock_graph_cls.return_value.get_required_skills.return_value = {
+            "Python",
+            "Django",
+        }
+        mock_eval_cls.return_value.evaluate_batch.return_value = [
+            {"score": 50, "reason": "x"}
+        ]
 
         # When
         start_time = time.time()

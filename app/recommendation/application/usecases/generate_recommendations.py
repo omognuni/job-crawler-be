@@ -5,8 +5,13 @@ from typing import Optional
 
 from common.application.result import Err, Ok, Result
 from common.ports.graph_store import GraphStorePort
+from common.ports.recommendation_evaluator import RecommendationEvaluatorPort
 from common.ports.vector_store import VectorStorePort
 from job.models import JobPosting
+from recommendation.domain.scoring import (
+    calculate_match_score_and_reason,
+    calculate_position_similarity,
+)
 from recommendation.models import JobRecommendation, RecommendationPrompt
 from resume.models import Resume
 
@@ -26,9 +31,11 @@ class GenerateRecommendationsUseCase:
         *,
         vector_store: VectorStorePort,
         graph_store: GraphStorePort,
+        evaluator: RecommendationEvaluatorPort,
     ):
         self._vector_store = vector_store
         self._graph_store = graph_store
+        self._evaluator = evaluator
 
     def execute(
         self,
@@ -157,11 +164,10 @@ class GenerateRecommendationsUseCase:
                     posting_position = posting.position
                 except JobPosting.DoesNotExist:
                     posting_position = ""
-                # 기존 서비스의 규칙 기반 함수와 동일한 로직이 필요하지만,
-                # 여기서는 기존 서비스 함수를 호출하기 위해 import cycle을 피하려고 간단히 포함 매칭.
-                u = user_position.replace(" ", "").lower()
-                j = (posting_position or "").replace(" ", "").lower()
-                position_similarity = 1.0 if u and j and (u in j or j in u) else 0.0
+                position_similarity = calculate_position_similarity(
+                    user_position=user_position,
+                    job_position=posting_position,
+                )
 
                 w_pos = 0.5
                 w_vec = 0.3
@@ -184,16 +190,32 @@ class GenerateRecommendationsUseCase:
         if prompt_id:
             prompt = RecommendationPrompt.objects.get(id=prompt_id)
             postings_to_evaluate = []
+            search_contexts = []
             for pid in matched_postings:
                 try:
-                    postings_to_evaluate.append(JobPosting.objects.get(posting_id=pid))
+                    posting = JobPosting.objects.get(posting_id=pid)
+                    postings_to_evaluate.append(posting)
+                    search_contexts.append(
+                        {
+                            "hybrid_score": next(
+                                (
+                                    score
+                                    for _pid, score, _ in ranked_postings
+                                    if _pid == pid
+                                ),
+                                0.0,
+                            ),
+                            "vector_similarity": vector_scores.get(pid, 0.0),
+                            "skill_matches": skill_match_scores.get(pid, 0),
+                        }
+                    )
                 except JobPosting.DoesNotExist:
                     continue
-            # 기존 서비스의 batch LLM 함수를 재사용하는 형태는 다음 단계에서 분리(RecommendationEvaluatorPort)
-            from recommendation.services import RecommendationService  # local import
-
-            batch_results = RecommendationService._evaluate_match_batch_with_llm(
-                postings_to_evaluate, resume, prompt
+            batch_results = self._evaluator.evaluate_batch(
+                postings=postings_to_evaluate,
+                resume=resume,
+                prompt=prompt,
+                search_contexts=search_contexts,
             )
             for posting, result in zip(postings_to_evaluate, batch_results):
                 recommendations.append(
@@ -209,15 +231,15 @@ class GenerateRecommendationsUseCase:
                     }
                 )
         else:
-            from recommendation.services import RecommendationService  # local import
-
             for pid in matched_postings:
                 try:
                     posting = JobPosting.objects.get(posting_id=pid)
                 except JobPosting.DoesNotExist:
                     continue
-                score, reason = RecommendationService._calculate_match_score_and_reason(
-                    posting, user_skills, user_career_years
+                score, reason = calculate_match_score_and_reason(
+                    posting=posting,
+                    user_skills=user_skills,
+                    user_career_years=user_career_years,
                 )
                 recommendations.append(
                     {

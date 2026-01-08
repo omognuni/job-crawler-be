@@ -114,7 +114,7 @@ class TestResumeService:
         assert result.career_years == 0
         assert "API 키" in result.strengths
 
-    @patch("resume.services.ChromaVectorStore")
+    @patch("resume.application.container.ChromaVectorStore")
     @patch("resume.application.usecases.process_resume.SkillExtractionService")
     @patch("common.adapters.google_genai_resume_analyzer.os.getenv")
     def test_process_resume_sync_success(

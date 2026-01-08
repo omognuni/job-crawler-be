@@ -7,11 +7,8 @@ Resume Celery Tasks
 import logging
 
 from celery import shared_task
-from common.adapters.chroma_vector_store import ChromaVectorStore
-from common.adapters.django_resume_repo import DjangoResumeRepository
-from common.adapters.google_genai_resume_analyzer import GoogleGenAIResumeAnalyzer
 from common.application.result import Err, Ok
-from resume.application.usecases.process_resume import ProcessResumeUseCase
+from resume.application.container import build_process_resume_usecase
 
 logger = logging.getLogger(__name__)
 
@@ -31,11 +28,7 @@ def process_resume(self, resume_id: int, force_reindex: bool = False):
         dict: 처리 결과
     """
     try:
-        usecase = ProcessResumeUseCase(
-            resume_repo=DjangoResumeRepository(),
-            vector_store=ChromaVectorStore(),
-            resume_analyzer=GoogleGenAIResumeAnalyzer(),
-        )
+        usecase = build_process_resume_usecase()
 
         # force_reindex=True는 "분석 스킵"이 아니라 "임베딩 재생성" 목적이었는데,
         # 현재 서비스 구현은 필드 누락 시 분석을 수행하는 등 정책이 섞여 있었습니다.
