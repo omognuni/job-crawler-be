@@ -24,3 +24,7 @@
 ## API 동작(중요 변경)
 - `GET /api/v1/resumes/{id}/analyze/` 는 동기 응답이 아니라 **202 + task_id**를 반환합니다.
 - 상태 확인: `GET /api/v1/resumes/{id}/analyze-status/`
+
+## Request-ID(코릴레이션)
+- 모든 요청은 `common.middleware.RequestIdMiddleware`를 통해 `X-Request-ID`가 응답에 포함됩니다.
+- 로그에는 `request_id=...`가 기본으로 찍힙니다.

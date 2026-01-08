@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 
 from common.application.result import Err, Ok
 from job.application.container import build_process_job_posting_usecase
+from job.dtos import ProcessJobPostingResultDTO
 
 
 class JobService:
@@ -143,6 +144,7 @@ class JobService:
         usecase = build_process_job_posting_usecase()
         result = usecase.execute(posting_id=posting_id)
         if isinstance(result, Ok):
-            return result.value
+            dto: ProcessJobPostingResultDTO = result.value
+            return dto.model_dump()
         assert isinstance(result, Err)
         return {"success": False, "error": result.message}

@@ -7,6 +7,7 @@ import logging
 from celery import shared_task
 from common.application.result import Err, Ok
 from job.application.container import build_process_job_posting_usecase
+from job.dtos import ProcessJobPostingResultDTO
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +32,8 @@ def process_job_posting(self, posting_id: int, reindex: bool = False):
         result = usecase.execute(posting_id=int(posting_id))
 
         if isinstance(result, Ok):
-            return result.value
+            dto: ProcessJobPostingResultDTO = result.value
+            return dto.model_dump()
 
         assert isinstance(result, Err)
         if result.code == "NOT_FOUND":

@@ -7,6 +7,7 @@ from common.ports.graph_store import GraphStorePort
 from common.ports.job_repo import JobPostingRepositoryPort
 from common.ports.vector_store import VectorStorePort
 from job.application.embedding_text import build_job_posting_embedding_text
+from job.dtos import ProcessJobPostingResultDTO
 from skill.services import SkillExtractionService
 
 logger = logging.getLogger(__name__)
@@ -32,7 +33,7 @@ class ProcessJobPostingUseCase:
         self._vector_store = vector_store
         self._graph_store = graph_store
 
-    def execute(self, *, posting_id: int) -> Result[dict]:
+    def execute(self, *, posting_id: int) -> Result[ProcessJobPostingResultDTO]:
         job_posting = self._job_repo.get_by_id(posting_id)
         if not job_posting:
             return Err(code="NOT_FOUND", message=f"JobPosting {posting_id} not found")
@@ -79,12 +80,12 @@ class ProcessJobPostingUseCase:
             )
 
         return Ok(
-            {
-                "success": True,
-                "posting_id": posting_id,
-                "skills_required": len(skills_required),
-                "skills_preferred_text": (
+            ProcessJobPostingResultDTO(
+                success=True,
+                posting_id=posting_id,
+                skills_required=len(skills_required),
+                skills_preferred_text=(
                     skills_preferred[:50] if skills_preferred else ""
                 ),
-            }
+            )
         )

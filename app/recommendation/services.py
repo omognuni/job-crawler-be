@@ -45,7 +45,7 @@ class RecommendationService:
     @staticmethod
     def get_recommendations(
         resume_id: int, limit: int = 100, prompt_id: Optional[int] = None
-    ) -> List[Dict]:
+    ) -> List[JobRecommendation]:
         """
         사용자에게 적합한 채용 공고 추천
 
@@ -348,7 +348,8 @@ def get_recommendations(resume_id: int, limit: int = 10) -> List[Dict]:
 
     RecommendationService.get_recommendations()를 호출합니다.
     """
-    return RecommendationService.get_recommendations(resume_id, limit)
+    # 내부적으로는 JobRecommendation 객체 리스트를 반환합니다.
+    return RecommendationService.get_recommendations(resume_id, limit)  # type: ignore[return-value]
 
 
 def get_skill_statistics(skill_name: str) -> Dict:
