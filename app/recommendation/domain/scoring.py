@@ -106,12 +106,32 @@ def calculate_match_score_and_reason(
     career_min = posting.career_min
     career_max = posting.career_max
 
-    if career_min <= user_career_years <= career_max:
+    # career_min/career_max 는 null=True 이므로 None-safe하게 처리
+    if career_min is None and career_max is None:
         score += 20
-        reasons.append(f"경력 요건 충족 ({user_career_years}년)")
-    elif career_min <= user_career_years <= career_max + 2:
-        score += 10
-        reasons.append(f"경력 범위 근접 ({user_career_years}년)")
+        reasons.append("경력 무관")
+    elif career_min is None and career_max is not None:
+        if user_career_years <= career_max:
+            score += 20
+            reasons.append(f"경력 요건 충족 ({user_career_years}년)")
+        elif user_career_years <= career_max + 2:
+            score += 10
+            reasons.append(f"경력 범위 근접 ({user_career_years}년)")
+    elif career_min is not None and career_max is None:
+        if user_career_years >= career_min:
+            score += 20
+            reasons.append(f"경력 요건 충족 ({user_career_years}년)")
+        elif user_career_years >= max(career_min - 2, 0):
+            score += 10
+            reasons.append(f"경력 범위 근접 ({user_career_years}년)")
+    else:
+        assert career_min is not None and career_max is not None
+        if career_min <= user_career_years <= career_max:
+            score += 20
+            reasons.append(f"경력 요건 충족 ({user_career_years}년)")
+        elif career_min <= user_career_years <= career_max + 2:
+            score += 10
+            reasons.append(f"경력 범위 근접 ({user_career_years}년)")
 
     match_reason = " | ".join(reasons) if reasons else "벡터 유사도 기반 매칭"
     score = min(score, 100)

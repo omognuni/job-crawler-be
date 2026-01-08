@@ -113,9 +113,7 @@ JSON Format Only:
                         ),
                     )
                     text = (response.text or "").strip()
-                    text = re.sub(
-                        r"^```json\\s*|\\s*```$", "", text, flags=re.MULTILINE
-                    )
+                    text = re.sub(r"^```json\s*|\s*```$", "", text, flags=re.MULTILINE)
                     data = json.loads(text)
                     if not isinstance(data, list):
                         raise ValueError("LLM response is not a JSON list")
