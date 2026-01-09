@@ -29,6 +29,23 @@ class Resume(models.Model):
     analyzed_at = models.DateTimeField(
         null=True, blank=True, help_text="마지막 분석 시간"
     )
+    analyzed_content_hash = models.CharField(
+        max_length=64,
+        blank=True,
+        null=True,
+        help_text="마지막 분석 시점의 content_hash (변경 감지용)",
+    )
+    last_process_task_id = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        help_text="마지막 이력서 처리(Celery) task_id",
+    )
+    last_process_task_updated_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="마지막 이력서 처리(Celery) task_id 갱신 시간",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -46,6 +63,31 @@ class Resume(models.Model):
         """
         저장 시 해시값 자동 갱신
         """
+        # update_fields에 "분석/처리 결과"만 포함된 경우, 자동 처리 태스크 스케줄링을 스킵합니다.
+        # (무한 루프 방지 - 처리 태스크가 analysis_result 등을 업데이트하기 때문)
+        update_fields = kwargs.get("update_fields")
+        analysis_update_fields = {
+            "analysis_result",
+            "experience_summary",
+            "analyzed_at",
+            "analyzed_content_hash",
+            "last_process_task_id",
+            "last_process_task_updated_at",
+        }
+        auto_enabled = getattr(settings, "AUTO_PROCESS_RESUME_ON_SAVE", True)
+        should_schedule_processing = auto_enabled and (
+            update_fields is None
+            or not set(update_fields).issubset(analysis_update_fields)
+        )
+
+        old_content_hash = None
+        if self.pk and should_schedule_processing:
+            old_content_hash = (
+                Resume.objects.filter(pk=self.pk)
+                .values_list("content_hash", flat=True)
+                .first()
+            )
+
         # 대표 이력서 설정 시 다른 이력서 해제
         if self.is_primary:
             Resume.objects.filter(user=self.user, is_primary=True).exclude(
@@ -55,3 +97,21 @@ class Resume(models.Model):
         self.content_hash = self.calculate_hash()
 
         super().save(*args, **kwargs)
+
+        # 트랜잭션 커밋 후 비동기 처리 태스크 스케줄링
+        if should_schedule_processing and (
+            old_content_hash is None or old_content_hash != self.content_hash
+        ):
+            transaction.on_commit(lambda: self._schedule_processing())
+
+    def _schedule_processing(self):
+        """비동기 처리 태스크 스케줄링"""
+        from django.utils import timezone
+
+        from .tasks import process_resume
+
+        async_result = process_resume.delay(self.id)
+        Resume.objects.filter(pk=self.pk).update(
+            last_process_task_id=async_result.id,
+            last_process_task_updated_at=timezone.now(),
+        )

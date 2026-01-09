@@ -82,9 +82,12 @@ class TestRecommendationService:
         assert 0 < score < 100
         assert "필수 스킬" in reason
 
-    @patch("recommendation.services.vector_db_client")
-    @patch("recommendation.services.graph_db_client")
-    def test_get_recommendations_success(self, mock_graph_db, mock_vector_db):
+    @patch("recommendation.application.container.Neo4jGraphStore")
+    @patch("recommendation.application.container.ChromaVectorStore")
+    @patch("recommendation.application.container.GeminiRecommendationEvaluator")
+    def test_get_recommendations_success(
+        self, mock_eval_cls, mock_vector_cls, mock_graph_cls
+    ):
         """추천 생성 성공"""
         # Given
         from django.contrib.auth import get_user_model
@@ -92,7 +95,7 @@ class TestRecommendationService:
         User = get_user_model()
         user = User.objects.create_user(username="testuser", password="password")
         resume = Resume.objects.create(
-            user_id=user.id,
+            user=user,
             content="Backend Developer",
             analysis_result={
                 "skills": ["Python", "Django"],
@@ -117,27 +120,20 @@ class TestRecommendationService:
         )
 
         # Mock ChromaDB
-        mock_resumes_collection = MagicMock()
-        mock_jobs_collection = MagicMock()
-
-        mock_vector_db.get_or_create_collection.side_effect = [
-            mock_resumes_collection,
-            mock_jobs_collection,
-        ]
-
-        mock_resumes_collection.get.return_value = {"embeddings": [[0.1, 0.2, 0.3]]}
-
-        mock_jobs_collection.query.return_value = {"ids": [["1"]]}
+        mock_vector_cls.return_value.get_embedding.return_value = [0.1, 0.2, 0.3]
+        mock_vector_cls.return_value.query_by_embedding.return_value = {
+            "ids": [["1"]],
+            "distances": [[0.2]],
+        }
 
         # Mock Neo4j
-        # 1. _get_postings_by_skills 호출 결과
-        # 2. _filter_by_skill_graph 내부 호출 결과 (posting_id=1)
-        mock_graph_db.execute_query.side_effect = [
-            [{"posting_id": 1}],  # _get_postings_by_skills
-            [
-                {"skill_name": "Python"},
-                {"skill_name": "Django"},
-            ],  # _filter_by_skill_graph
+        mock_graph_cls.return_value.get_postings_by_skills.return_value = [1]
+        mock_graph_cls.return_value.get_required_skills.return_value = {
+            "Python",
+            "Django",
+        }
+        mock_eval_cls.return_value.evaluate_batch.return_value = [
+            {"score": 50, "reason": "x"}
         ]
 
         # When
@@ -145,12 +141,13 @@ class TestRecommendationService:
 
         # Then
         assert len(recommendations) > 0
-        assert recommendations[0]["posting_id"] == 1
+        assert recommendations[0].job_posting_id == 1
 
-    @patch("recommendation.services.vector_db_client")
-    @patch("recommendation.services.graph_db_client")
+    @patch("recommendation.application.container.Neo4jGraphStore")
+    @patch("recommendation.application.container.ChromaVectorStore")
+    @patch("recommendation.application.container.GeminiRecommendationEvaluator")
     def test_get_recommendations_position_similarity_prioritized(
-        self, mock_graph_db, mock_vector_db
+        self, mock_eval_cls, mock_vector_cls, mock_graph_cls
     ):
         """
         포지션 유사도가 가장 큰 가중치로 반영되어,
@@ -162,7 +159,7 @@ class TestRecommendationService:
         User = get_user_model()
         user = User.objects.create_user(username="testuser_pos", password="password")
         resume = Resume.objects.create(
-            user_id=user.id,
+            user=user,
             content="Backend Developer",
             analysis_result={
                 "skills": ["Python", "Django"],
@@ -204,31 +201,25 @@ class TestRecommendationService:
         )
 
         # Mock ChromaDB: 동일한 임베딩이 준비되어 있고, query는 두 공고를 반환
-        mock_resumes_collection = MagicMock()
-        mock_jobs_collection = MagicMock()
-        mock_vector_db.get_or_create_collection.side_effect = [
-            mock_resumes_collection,
-            mock_jobs_collection,
-        ]
-        mock_resumes_collection.get.return_value = {"embeddings": [[0.1, 0.2, 0.3]]}
+        mock_vector_cls.return_value.get_embedding.return_value = [0.1, 0.2, 0.3]
 
         # query_by_embedding을 통해 2개 후보가 들어오도록
-        mock_vector_db.query_by_embedding.return_value = {
+        mock_vector_cls.return_value.query_by_embedding.return_value = {
             "ids": [["1", "2"]],
             "distances": [[0.2, 0.2]],  # 동일 distance -> 동일 vector_score
         }
 
-        # Graph search도 2개 후보를 반환하도록 (순서 섞여도 재랭킹으로 결정됨)
-        mock_graph_db.execute_query.side_effect = [
-            [{"posting_id": 2}, {"posting_id": 1}],  # _get_postings_by_skills
-            [
-                {"skill_name": "Python"},
-                {"skill_name": "Django"},
-            ],  # _calculate_skill_match_scores (pid=2)
-            [
-                {"skill_name": "Python"},
-                {"skill_name": "Django"},
-            ],  # _calculate_skill_match_scores (pid=1)
+        # Graph search도 2개 후보를 반환하도록
+        mock_graph_cls.return_value.get_postings_by_skills.return_value = [2, 1]
+
+        def _skills(pid: int):
+            return {"Python", "Django"}
+
+        mock_graph_cls.return_value.get_required_skills.side_effect = (
+            lambda *, posting_id: _skills(posting_id)
+        )
+        mock_eval_cls.return_value.evaluate_batch.return_value = [
+            {"score": 50, "reason": "x"}
         ]
 
         # When
@@ -237,7 +228,7 @@ class TestRecommendationService:
         # Then
         assert len(recommendations) >= 2
         # 포지션이 백엔드로 매칭되는 posting_id=1이 먼저 와야 한다
-        assert recommendations[0]["posting_id"] == 1
+        assert recommendations[0].job_posting_id == 1
 
     def test_filter_by_skill_graph_empty_skills(self):
         """스킬이 없는 경우 필터링"""

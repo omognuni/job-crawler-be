@@ -7,7 +7,7 @@ Search Service
 import json
 from typing import Dict, List
 
-from common.graph_db import graph_db_client
+from common.adapters.neo4j_graph_store import Neo4jGraphStore
 from common.vector_db import vector_db_client
 from django.db.models import Case, When
 from job.models import JobPosting
@@ -114,21 +114,13 @@ class SearchService:
         # 2단계: 스킬이 제공된 경우 Graph DB에서 스킬 매칭 필터링
         if user_skills:
             matched_postings = []
+            graph_store = Neo4jGraphStore()
             for posting_id in int_posting_ids:
-                # Neo4j에서 해당 공고의 필수 스킬 조회
-                query = """
-                MATCH (jp:JobPosting {posting_id: $posting_id})-[:REQUIRES_SKILL]->(skill:Skill)
-                RETURN skill.name AS skill_name
-                """
-                result = graph_db_client.execute_query(
-                    query, {"posting_id": posting_id}
-                )
-
-                if result:
-                    posting_skills = {record["skill_name"] for record in result}
-                    # 사용자 스킬과 매칭되는 경우만 포함
-                    if set(user_skills) & posting_skills:
-                        match_count = len(set(user_skills) & posting_skills)
+                posting_skills = graph_store.get_required_skills(posting_id=posting_id)
+                if posting_skills:
+                    user_skill_set = set(user_skills)
+                    if user_skill_set & posting_skills:
+                        match_count = len(user_skill_set & posting_skills)
                         matched_postings.append((posting_id, match_count))
 
             # 스킬 매칭 수 기준 정렬

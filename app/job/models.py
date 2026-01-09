@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.db import models, transaction
 
 # Backward compatibility imports
@@ -14,14 +15,15 @@ class JobPosting(models.Model):
     url = models.URLField(max_length=255)
     company_name = models.CharField(max_length=255)
     position = models.CharField(max_length=255)
-    main_tasks = models.TextField()
-    requirements = models.TextField()
-    preferred_points = models.TextField()
-    location = models.CharField(max_length=255)
-    district = models.CharField(max_length=255)
-    employment_type = models.CharField(max_length=255)
-    career_min = models.IntegerField()
-    career_max = models.IntegerField()
+    category = models.JSONField(null=True, blank=True, help_text="카테고리 (JSON 배열)")
+    main_tasks = models.TextField(null=True, blank=True)
+    requirements = models.TextField(null=True, blank=True)
+    preferred_points = models.TextField(null=True, blank=True)
+    location = models.CharField(max_length=255, null=True, blank=True)
+    district = models.CharField(max_length=255, null=True, blank=True)
+    employment_type = models.CharField(max_length=255, null=True, blank=True)
+    career_min = models.IntegerField(null=True)
+    career_max = models.IntegerField(null=True)
     skills_required = models.JSONField(
         null=True, blank=True, help_text="요구 기술 스택 (JSON 배열)"
     )
@@ -44,8 +46,10 @@ class JobPosting(models.Model):
         # update_fields에 skills_* 필드가 포함된 경우 태스크 호출 스킵
         # (무한 루프 방지 - tasks.py에서 이미 스킬 업데이트 수행)
         update_fields = kwargs.get("update_fields")
-        should_process = update_fields is None or not set(update_fields).issubset(
-            {"skills_required", "skills_preferred"}
+        auto_enabled = getattr(settings, "AUTO_PROCESS_JOB_ON_SAVE", True)
+        should_process = auto_enabled and (
+            update_fields is None
+            or not set(update_fields).issubset({"skills_required", "skills_preferred"})
         )
 
         # 모델 저장

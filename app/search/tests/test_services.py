@@ -61,9 +61,9 @@ class TestSearchService:
         # Then
         assert results == []
 
-    @patch("search.services.graph_db_client")
+    @patch("search.services.Neo4jGraphStore")
     @patch("search.services.vector_db_client")
-    def test_hybrid_search_with_skills(self, mock_vector_db, mock_graph_db):
+    def test_hybrid_search_with_skills(self, mock_vector_db, mock_graph_store):
         """스킬 기반 하이브리드 검색"""
         # Given
         posting = JobPosting.objects.create(
@@ -88,10 +88,10 @@ class TestSearchService:
         mock_vector_db.query.return_value = {"ids": [["2"]]}
 
         # Mock Neo4j
-        mock_graph_db.execute_query.return_value = [
-            {"skill_name": "Python"},
-            {"skill_name": "Django"},
-        ]
+        mock_graph_store.return_value.get_required_skills.return_value = {
+            "Python",
+            "Django",
+        }
 
         user_skills = ["Python", "Django"]
 

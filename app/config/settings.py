@@ -75,6 +75,7 @@ if not os.getenv("USE_NGINX", "False") == "True":
 
 MIDDLEWARE.extend(
     [
+        "common.middleware.RequestIdMiddleware",
         "corsheaders.middleware.CorsMiddleware",
         "django.contrib.sessions.middleware.SessionMiddleware",
         "django.middleware.common.CommonMiddleware",
@@ -211,6 +212,10 @@ CELERY_TIMEZONE = TIME_ZONE
 CELERY_TASK_TRACK_STARTED = True
 CELERY_TASK_TIME_LIMIT = 30 * 60  # 30 minutes
 
+# Auto processing switches (mainly for tests)
+AUTO_PROCESS_RESUME_ON_SAVE = os.getenv("AUTO_PROCESS_RESUME_ON_SAVE", "True") == "True"
+AUTO_PROCESS_JOB_ON_SAVE = os.getenv("AUTO_PROCESS_JOB_ON_SAVE", "True") == "True"
+
 # Neo4j Configuration
 NEO4J_URI = os.getenv("NEO4J_URI", "bolt://neo4j:7687")
 NEO4J_USER = os.getenv("NEO4J_USER", "neo4j")
@@ -252,6 +257,28 @@ CSRF_COOKIE_SAMESITE = "Strict"
 CSRF_TRUSTED_ORIGINS = os.getenv(
     "CSRF_TRUSTED_ORIGINS", "http://localhost:8000,http://127.0.0.1:8000"
 ).split(",")
+
+# Logging (Request-ID 포함)
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "filters": {
+        "request_id": {"()": "common.logging.RequestIdFilter"},
+    },
+    "formatters": {
+        "standard": {
+            "format": "%(asctime)s %(levelname)s [%(name)s] [request_id=%(request_id)s] %(message)s"
+        }
+    },
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "filters": ["request_id"],
+            "formatter": "standard",
+        }
+    },
+    "root": {"handlers": ["console"], "level": os.getenv("LOG_LEVEL", "INFO")},
+}
 
 # if not DEBUG:
 #     # Production security settings
