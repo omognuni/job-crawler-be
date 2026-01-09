@@ -150,8 +150,8 @@ class TestRecommendationService:
         self, mock_eval_cls, mock_vector_cls, mock_graph_cls
     ):
         """
-        포지션 유사도가 가장 큰 가중치로 반영되어,
-        스킬/벡터 점수가 유사하더라도 포지션이 맞는 공고가 먼저 오도록 한다.
+        강한 포지션 필터가 적용되어,
+        포지션 카테고리가 다른 공고(예: frontend)는 후보에서 제외된다.
         """
         # Given
         from django.contrib.auth import get_user_model
@@ -226,8 +226,8 @@ class TestRecommendationService:
         recommendations = RecommendationService.get_recommendations(resume.id, limit=10)
 
         # Then
-        assert len(recommendations) >= 2
-        # 포지션이 백엔드로 매칭되는 posting_id=1이 먼저 와야 한다
+        # frontend 공고는 제외되어 backend 공고만 남아야 한다
+        assert len(recommendations) == 1
         assert recommendations[0].job_posting_id == 1
 
     def test_filter_by_skill_graph_empty_skills(self):

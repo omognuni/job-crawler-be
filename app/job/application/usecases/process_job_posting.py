@@ -6,6 +6,7 @@ from common.application.result import Err, Ok, Result
 from common.ports.graph_store import GraphStorePort
 from common.ports.job_repo import JobPostingRepositoryPort
 from common.ports.vector_store import VectorStorePort
+from job.application.chunking import chunk_text_for_rag
 from job.application.embedding_text import build_job_posting_embedding_text
 from job.dtos import ProcessJobPostingResultDTO
 from skill.services import SkillExtractionService
@@ -69,6 +70,39 @@ class ProcessJobPostingUseCase:
             )
         else:
             logger.warning(f"Embedding text too short for posting {posting_id}")
+
+        # 3-2) RAG용 섹션 chunk 임베딩 업서트
+        # - requirements / preferred_points / main_tasks / skills_required(+position) 를 분리해서 저장
+        # - 추천 시 "근거 스니펫"을 직접 검색/인용할 수 있게 합니다.
+        chunks_collection = "job_posting_chunks"
+        sections: list[tuple[str, str]] = [
+            ("tasks", job_posting.main_tasks or ""),
+            ("requirements", job_posting.requirements or ""),
+            ("preferred", job_posting.preferred_points or ""),
+            (
+                "stack",
+                ", ".join(job_posting.skills_required or []),
+            ),
+            ("position", job_posting.position or ""),
+        ]
+        for section_name, section_text in sections:
+            for ch in chunk_text_for_rag(section=section_name, text=section_text):
+                doc_id = f"{posting_id}:{ch.section}:{ch.chunk_index}"
+                chunk_metadata = {
+                    **(metadata or {}),
+                    "posting_id": int(posting_id),
+                    "section": ch.section,
+                    "chunk_index": int(ch.chunk_index),
+                }
+                # 너무 짧은 텍스트는 검색/임베딩 가치가 낮아서 제외
+                if len(ch.text) < 20:
+                    continue
+                self._vector_store.upsert_text(
+                    collection_name=chunks_collection,
+                    doc_id=doc_id,
+                    text=ch.text,
+                    metadata=chunk_metadata,
+                )
 
         # 4) 그래프 업데이트
         if skills_required:

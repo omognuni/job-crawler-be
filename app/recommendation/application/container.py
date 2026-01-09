@@ -4,6 +4,7 @@ from common.adapters.chroma_vector_store import ChromaVectorStore
 from common.adapters.gemini_recommendation_evaluator import (
     GeminiRecommendationEvaluator,
 )
+from common.adapters.gemini_search_plan_builder import GeminiSearchPlanBuilder
 from common.adapters.neo4j_graph_store import Neo4jGraphStore
 from recommendation.application.usecases.generate_recommendations import (
     GenerateRecommendationsUseCase,
@@ -18,4 +19,5 @@ def build_generate_recommendations_usecase() -> GenerateRecommendationsUseCase:
         vector_store=ChromaVectorStore(),
         graph_store=Neo4jGraphStore(),
         evaluator=GeminiRecommendationEvaluator(),
+        plan_builder=GeminiSearchPlanBuilder(),
     )

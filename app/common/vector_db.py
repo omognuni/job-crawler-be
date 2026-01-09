@@ -43,6 +43,9 @@ class VectorDB:
         query_kwargs = {
             "query_texts": query_texts,
             "n_results": n_results,
+            # RAG 근거 구성을 위해 documents/metadatas가 필요합니다.
+            # 기존 호출자들은 ids/distances만 사용하므로 include를 넓혀도 호환됩니다.
+            "include": ["distances", "documents", "metadatas"],
         }
 
         if where:
@@ -113,6 +116,7 @@ class VectorDB:
         query_kwargs = {
             "query_embeddings": query_embeddings,
             "n_results": n_results,
+            "include": ["distances", "documents", "metadatas"],
         }
 
         if where:

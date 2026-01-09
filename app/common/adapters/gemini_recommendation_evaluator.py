@@ -59,11 +59,35 @@ class GeminiRecommendationEvaluator:
                 context_info = ""
                 if search_contexts and idx < len(search_contexts):
                     ctx = search_contexts[idx]
+                    # 근거/플랜 정보를 가능한 한 짧게 포함합니다(프롬프트 폭주 방지).
+                    plan_summary = ""
+                    if isinstance(ctx.get("plan"), dict):
+                        p = ctx["plan"]
+                        role = str(p.get("target_role", "") or "").strip()
+                        rubric = (
+                            p.get("scoring_rubric")
+                            if isinstance(p.get("scoring_rubric"), dict)
+                            else {}
+                        )
+                        plan_summary = f"\n- 타겟 역할: {role}\n- 루브릭: {json.dumps(rubric, ensure_ascii=False)}"
+
+                    evidence_summary = ""
+                    if isinstance(ctx.get("evidence_quotes"), list):
+                        quotes = [
+                            str(x) for x in ctx["evidence_quotes"] if str(x).strip()
+                        ]
+                        quotes = quotes[:4]
+                        if quotes:
+                            evidence_summary = "\n- 근거 스니펫:\n  - " + "\n  - ".join(
+                                quotes
+                            )
+
                     context_info = f"""
 [Search Context - 이 공고는 다음 검색 기준으로 선별되었습니다]
 - 벡터 유사도 점수: {ctx.get('vector_similarity', 0):.2f}
 - 스킬 매칭 수: {ctx.get('skill_matches', 0)}개
 - 하이브리드 점수: {ctx.get('hybrid_score', 0):.2f}
+{plan_summary}{evidence_summary}
 """
 
                 jobs_text += f"""

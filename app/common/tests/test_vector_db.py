@@ -100,6 +100,7 @@ class TestVectorDB(unittest.TestCase):
         mock_collection.query.assert_called_once_with(
             query_texts=query_texts,
             n_results=n_results,
+            include=["distances", "documents", "metadatas"],
         )
         self.assertEqual(results, mock_query_results)
 

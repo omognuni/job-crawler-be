@@ -577,6 +577,43 @@
                 }
             }
         },
+        "/api/v1/recommendations/for-user/{user_id}/": {
+            "get": {
+                "operationId": "recommendations_for_user_retrieve",
+                "description": "특정 사용자를 위한 실시간 추천 생성\n\nGET /api/v1/recommendations/for-user/<user_id>/?limit=10",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "user_id",
+                        "schema": {
+                            "type": "string",
+                            "pattern": "^[0-9]+$"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "recommendations"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/JobRecommendationRead"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
         "/api/v1/recommendations/prompts/": {
             "get": {
                 "operationId": "recommendations_prompts_list",
@@ -857,6 +894,43 @@
             "get": {
                 "operationId": "resumes_analyze_retrieve",
                 "description": "이력서 분석\n\nGET /api/v1/resumes/<resume_id>/analyze/",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "resume을 식별하는 고유한 정수 값.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "resumes"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Resume"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1/resumes/{id}/analyze-status/": {
+            "get": {
+                "operationId": "resumes_analyze_status_retrieve",
+                "description": "이력서 분석 상태 조회\n\nGET /api/v1/resumes/<resume_id>/analyze-status/",
                 "parameters": [
                     {
                         "in": "path",
@@ -1229,36 +1303,48 @@
                         "type": "string",
                         "maxLength": 255
                     },
+                    "category": {
+                        "nullable": true,
+                        "description": "카테고리 (JSON 배열)"
+                    },
                     "main_tasks": {
-                        "type": "string"
+                        "type": "string",
+                        "nullable": true
                     },
                     "requirements": {
-                        "type": "string"
+                        "type": "string",
+                        "nullable": true
                     },
                     "preferred_points": {
-                        "type": "string"
+                        "type": "string",
+                        "nullable": true
                     },
                     "location": {
                         "type": "string",
+                        "nullable": true,
                         "maxLength": 255
                     },
                     "district": {
                         "type": "string",
+                        "nullable": true,
                         "maxLength": 255
                     },
                     "employment_type": {
                         "type": "string",
+                        "nullable": true,
                         "maxLength": 255
                     },
                     "career_min": {
                         "type": "integer",
                         "maximum": 2147483647,
-                        "minimum": -2147483648
+                        "minimum": -2147483648,
+                        "nullable": true
                     },
                     "career_max": {
                         "type": "integer",
                         "maximum": 2147483647,
-                        "minimum": -2147483648
+                        "minimum": -2147483648,
+                        "nullable": true
                     },
                     "created_at": {
                         "type": "string",
@@ -1272,18 +1358,10 @@
                     }
                 },
                 "required": [
-                    "career_max",
-                    "career_min",
                     "company_name",
                     "created_at",
-                    "district",
-                    "employment_type",
-                    "location",
-                    "main_tasks",
                     "position",
                     "posting_id",
-                    "preferred_points",
-                    "requirements",
                     "updated_at",
                     "url"
                 ]
@@ -1408,36 +1486,48 @@
                         "type": "string",
                         "maxLength": 255
                     },
+                    "category": {
+                        "nullable": true,
+                        "description": "카테고리 (JSON 배열)"
+                    },
                     "main_tasks": {
-                        "type": "string"
+                        "type": "string",
+                        "nullable": true
                     },
                     "requirements": {
-                        "type": "string"
+                        "type": "string",
+                        "nullable": true
                     },
                     "preferred_points": {
-                        "type": "string"
+                        "type": "string",
+                        "nullable": true
                     },
                     "location": {
                         "type": "string",
+                        "nullable": true,
                         "maxLength": 255
                     },
                     "district": {
                         "type": "string",
+                        "nullable": true,
                         "maxLength": 255
                     },
                     "employment_type": {
                         "type": "string",
+                        "nullable": true,
                         "maxLength": 255
                     },
                     "career_min": {
                         "type": "integer",
                         "maximum": 2147483647,
-                        "minimum": -2147483648
+                        "minimum": -2147483648,
+                        "nullable": true
                     },
                     "career_max": {
                         "type": "integer",
                         "maximum": 2147483647,
-                        "minimum": -2147483648
+                        "minimum": -2147483648,
+                        "nullable": true
                     },
                     "created_at": {
                         "type": "string",
@@ -1529,6 +1619,19 @@
                         "readOnly": true,
                         "nullable": true,
                         "description": "마지막 분석 시간"
+                    },
+                    "last_process_task_id": {
+                        "type": "string",
+                        "readOnly": true,
+                        "nullable": true,
+                        "description": "마지막 이력서 처리(Celery) task_id"
+                    },
+                    "last_process_task_updated_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true,
+                        "nullable": true,
+                        "description": "마지막 이력서 처리(Celery) task_id 갱신 시간"
                     },
                     "created_at": {
                         "type": "string",
@@ -1623,6 +1726,19 @@
                         "nullable": true,
                         "description": "마지막 분석 시간"
                     },
+                    "last_process_task_id": {
+                        "type": "string",
+                        "readOnly": true,
+                        "nullable": true,
+                        "description": "마지막 이력서 처리(Celery) task_id"
+                    },
+                    "last_process_task_updated_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true,
+                        "nullable": true,
+                        "description": "마지막 이력서 처리(Celery) task_id 갱신 시간"
+                    },
                     "created_at": {
                         "type": "string",
                         "format": "date-time",
@@ -1640,6 +1756,8 @@
                     "content_hash",
                     "created_at",
                     "id",
+                    "last_process_task_id",
+                    "last_process_task_updated_at",
                     "updated_at",
                     "user_id"
                 ]
