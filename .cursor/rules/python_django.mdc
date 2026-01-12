@@ -1,0 +1,42 @@
+---
+globs: *.py
+alwaysApply: false
+---
+## 3. Django Rest Framework (DRF)
+
+### 3.1 Views (Thin Views)
+- **ViewSets**: 가능한 경우 `ModelViewSet` 또는 `GenericViewSet`을 사용합니다.
+- **Delegation**: View는 HTTP 요청/응답 처리, 권한 검사, 데이터 검증만 담당하고, 실제 처리는 Service에 위임합니다.
+- **Exception Handling**: View 레벨에서 예외를 잡고 적절한 HTTP 상태 코드로 반환하며, 에러 로그를 남깁니다.
+
+```python
+# views.py
+class ResumeViewSet(ModelViewSet):
+    def create(self, request, *args, **kwargs):
+        try:
+            # Serializer validation
+            # Service call
+            return Response(...)
+        except Exception as e:
+            logger.error(...)
+            return Response(...)
+```
+
+### 3.2 Serializers
+- **ModelSerializer**: 모델 기반 데이터는 `ModelSerializer`를 사용합니다.
+- **Fields**: `fields`를 명시적으로 나열하거나 `__all__`을 사용하되, `read_only_fields`를 적절히 설정합니다.
+- **Endpoint Specific**: 각 Endpoint(Action)가 호출하는 함수명에 맞춰 Serializer를 분리하여 작성합니다.
+  - 하나의 거대한 Serializer 대신, 각 Action의 목적에 맞는 전용 Serializer를 정의합니다.
+  - 예: `create` -> `ResumeCreateSerializer`, `list` -> `ResumeListSerializer`, `retrieve` -> `ResumeDetailSerializer`
+
+---
+
+## 4. Async & Tasks
+
+- **Celery**: 비동기 작업(LLM 분석, 외부 API 호출 등)은 Celery Task로 정의(`tasks.py`)하여 처리합니다.
+- **Redis**: Celery Broker 및 Backend로 Redis를 사용합니다.
+
+## 5. Environment Variables
+
+- 설정값은 `os.getenv`를 사용하거나 `django.conf.settings`를 통해 접근합니다.
+- 하드코딩된 비밀키나 설정값은 절대 코드에 포함하지 않습니다.
