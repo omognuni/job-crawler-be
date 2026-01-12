@@ -2,3 +2,9 @@
 
 - **Command Execution**: 모든 명령어는 항상 컨테이너에서 `uv`를 사용하여 실행해야 합니다.
 - **Configuration Check**: 작업을 수행하기 전에 항상 `docker-compose.yml`을 확인하십시오.
+- **Architecture**: 프로젝트 레이어/DI/테스트 부수효과/Request-ID 규칙은 `.cursor/rules/architecture.mdc`를 따르십시오.
+- **Confluence Documentation (Atlassian MCP)**: 모든 Markdown 문서(예: `README.md`, `app/*.md`, `DEPLOYMENT.md`, `SECURITY.md`)의 **작성/갱신은 Atlassian MCP로 Confluence에 반영**한다.
+  - **프로젝트명 추출**: 문서/레포에서 프로젝트명을 우선 찾는다(예: `README.md`의 H1). (예: `Job Crawler Backend` → `Job Crawler`)
+  - **스페이스 선택**: Atlassian MCP로 Confluence 스페이스 목록을 조회/검색하여, **프로젝트명과 가장 유사한 스페이스**를 선택한다. (동률/모호하면 사용자에게 확인 요청)
+  - **문서 매핑**: 해당 스페이스에서 문서 제목이 유사한 페이지를 찾고, 있으면 업데이트/없으면 생성한다. (예: `Job Crawler TRD`, `Job Crawler PRD`)
+  - **작성 방식**: 로컬 Markdown을 “붙여넣기”가 아니라, **MCP로 페이지 본문을 업데이트**해서 단일 소스로 관리한다(변경 이력 포함).
