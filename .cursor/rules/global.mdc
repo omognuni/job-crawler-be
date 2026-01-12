@@ -1,7 +1,15 @@
+---
+alwaysApply: true
+---
+
 # Global Rules
 
 - **Command Execution**: 모든 명령어는 항상 컨테이너에서 `uv`를 사용하여 실행해야 합니다.
 - **Configuration Check**: 작업을 수행하기 전에 항상 `docker-compose.yml`을 확인하십시오.
+- **Ticket First (ALWAYS)**: 모든 작업은 **항상** 시작 전에 Atlassian MCP를 확인하여 관련 Jira 티켓이 있는지 확인하고, 있으면 해당 티켓의 **현재 진행 상태/최근 코멘트/블로커**를 확인한 뒤 진행한다.
+  - **티켓이 없으면**: 작업 규모/목적이 티켓이 필요한 변경이라면 `.cursor/rules/ticket.mdc` 규칙을 따라 **먼저 티켓을 작성**한 뒤 진행한다.
+  - **예외(티켓 생성 금지)**: 티켓이 불필요한 “드라이브바이/사소한 수정”이면 티켓을 만들지 않고 진행한다. (세부 기준은 `.cursor/rules/ticket.mdc`의 “티켓 생성하지 말 것” 항목을 따른다.)
+  - **작업 완료 후**: 해당 Jira Ticket에 진행 상황을 업데이트한다.
 - **Architecture**: 프로젝트 레이어/DI/테스트 부수효과/Request-ID 규칙은 `.cursor/rules/architecture.mdc`를 따르십시오.
 - **Confluence Documentation (Atlassian MCP)**: 모든 Markdown 문서(예: `README.md`, `app/*.md`, `DEPLOYMENT.md`, `SECURITY.md`)의 **작성/갱신은 Atlassian MCP로 Confluence에 반영**한다.
   - **프로젝트명 추출**: 문서/레포에서 프로젝트명을 우선 찾는다(예: `README.md`의 H1). (예: `Job Crawler Backend` → `Job Crawler`)
