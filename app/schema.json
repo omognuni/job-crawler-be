@@ -1394,8 +1394,7 @@
                         "description": "추천 순위 (1-10)"
                     },
                     "match_score": {
-                        "type": "number",
-                        "format": "double",
+                        "type": "integer",
                         "description": "매칭 점수"
                     },
                     "match_reason": {
@@ -1441,8 +1440,7 @@
                         "description": "추천 순위 (1-10)"
                     },
                     "match_score": {
-                        "type": "number",
-                        "format": "double",
+                        "type": "integer",
                         "description": "매칭 점수"
                     },
                     "match_reason": {
@@ -1564,8 +1562,7 @@
                         "description": "추천 순위 (1-10)"
                     },
                     "match_score": {
-                        "type": "number",
-                        "format": "double",
+                        "type": "integer",
                         "description": "매칭 점수"
                     },
                     "match_reason": {

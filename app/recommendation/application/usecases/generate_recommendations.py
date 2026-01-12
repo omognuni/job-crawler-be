@@ -11,6 +11,7 @@ from common.ports.vector_store import VectorStorePort
 from job.models import JobPosting
 from recommendation.domain.scoring import (
     map_position_to_category,
+    normalize_match_score,
     normalize_position_text,
 )
 from recommendation.models import JobRecommendation, RecommendationPrompt
@@ -315,6 +316,7 @@ class GenerateRecommendationsUseCase:
                     * ((0.60 * stack_ratio) + (0.25 * req_ratio) + (0.15 * pref_ratio)),
                 ),
             )
+            display_score_int = normalize_match_score(display_score)
 
             parts: list[str] = []
             if stack_skills:
@@ -348,7 +350,7 @@ class GenerateRecommendationsUseCase:
                     "posting": posting,
                     "posting_id": pid,
                     "sort_key": sort_key,
-                    "display_score": display_score,
+                    "display_score": display_score_int,
                     "vector_similarity": vec_sim,
                     "stack_match_ratio": stack_ratio,
                     "requirements_match_ratio": req_ratio,
@@ -419,7 +421,7 @@ class GenerateRecommendationsUseCase:
                         "posting_id": posting.posting_id,
                         "company_name": posting.company_name,
                         "position": posting.position,
-                        "match_score": float(result.get("score", 0)),
+                        "match_score": normalize_match_score(result.get("score", 0)),
                         "match_reason": str(result.get("reason", "") or ""),
                         "url": posting.url,
                         "location": posting.location,

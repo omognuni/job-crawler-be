@@ -55,7 +55,7 @@ class TestJobRecommendationViewSet:
             user_id=1,
             job_posting=posting,
             rank=1,
-            match_score=85.0,
+            match_score=85,
             match_reason="Good match",
         )
 
@@ -122,7 +122,7 @@ class TestJobRecommendationViewSet:
             "user_id": 3,
             "job_posting": posting.posting_id,
             "rank": 1,
-            "match_score": 90.0,
+            "match_score": 90.5,
             "match_reason": "Perfect match",
         }
 
@@ -131,6 +131,8 @@ class TestJobRecommendationViewSet:
 
         # Then
         assert response.status_code == status.HTTP_201_CREATED
+        # 반올림(half-up): 90.5 -> 91
+        assert response.data["match_score"] == 91
 
     def test_delete_recommendation(self):
         """추천 삭제"""
@@ -154,7 +156,7 @@ class TestJobRecommendationViewSet:
             user_id=4,
             job_posting=posting,
             rank=1,
-            match_score=85.0,
+            match_score=85,
             match_reason="Good match",
         )
 

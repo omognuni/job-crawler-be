@@ -264,7 +264,7 @@ class TestRecommendationService:
             user_id=1,
             job_posting=posting,
             rank=1,
-            match_score=85.0,
+            match_score=85,
             match_reason="Great match",
         )
 

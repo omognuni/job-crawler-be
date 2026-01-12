@@ -1,7 +1,33 @@
 from __future__ import annotations
 
+import math
+
 from job.models import JobPosting
 from skill.services import SkillExtractionService
+
+
+def normalize_match_score(value: object) -> int:
+    """
+    추천 점수를 정수(int)로 정규화합니다.
+    - 입력: float/int/str 등 숫자로 변환 가능한 값
+    - 출력: 0~100 범위의 int
+    - 규칙: 반올림(0.5 이상 올림, half-up) + 범위 클램프
+    """
+    if value is None:
+        return 0
+    try:
+        x = float(value)
+    except (TypeError, ValueError):
+        return 0
+
+    if not math.isfinite(x):
+        return 0
+
+    # 점수 범위는 0~100으로 고정
+    x = max(0.0, min(100.0, x))
+
+    # 반올림(half-up): 0.5 이상 올림
+    return int(math.floor(x + 0.5))
 
 
 def normalize_position_text(text: str) -> str:

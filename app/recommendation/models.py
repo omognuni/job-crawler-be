@@ -5,6 +5,7 @@ class JobRecommendation(models.Model):
     user_id = models.IntegerField()
     job_posting = models.ForeignKey("job.JobPosting", on_delete=models.CASCADE)
     rank = models.IntegerField(help_text="추천 순위 (1-10)")
+    # DB 스키마는 변경하지 않고(Float 유지), API/저장 시점에 반올림 정수로 정규화합니다.
     match_score = models.FloatField(help_text="매칭 점수")
     match_reason = models.TextField(help_text="추천 이유")
     created_at = models.DateTimeField(auto_now_add=True)
