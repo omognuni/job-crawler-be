@@ -7,6 +7,7 @@ import re
 import time
 from typing import Optional
 
+from common.adapters.gemini_model_settings import get_gemini_model_name
 from job.models import JobPosting
 from recommendation.models import RecommendationPrompt
 from resume.models import Resume
@@ -129,7 +130,7 @@ JSON Format Only:
             for attempt in range(max_retries):
                 try:
                     response = client.models.generate_content(
-                        model="gemini-2.0-flash",
+                        model=get_gemini_model_name(key="recommendation_evaluator"),
                         contents=full_prompt,
                         config=GenerateContentConfig(
                             temperature=0.1,

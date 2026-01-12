@@ -6,6 +6,7 @@ import os
 import re
 from typing import Any
 
+from common.adapters.gemini_model_settings import get_gemini_model_name
 from resume.models import Resume
 
 logger = logging.getLogger(__name__)
@@ -80,7 +81,7 @@ JSON 스키마(예시):
 """.strip()
 
             resp = client.models.generate_content(
-                model="gemini-2.0-flash",
+                model=get_gemini_model_name(key="search_plan_builder"),
                 contents=prompt,
                 config=GenerateContentConfig(temperature=0.1, max_output_tokens=800),
             )

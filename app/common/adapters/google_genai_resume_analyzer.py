@@ -5,6 +5,7 @@ import logging
 import os
 import re
 
+from common.adapters.gemini_model_settings import get_gemini_model_name
 from resume.dtos import ResumeAnalysisResultDTO
 
 logger = logging.getLogger(__name__)
@@ -87,7 +88,7 @@ class GoogleGenAIResumeAnalyzer:
             for attempt in range(max_retries):
                 try:
                     response = client.models.generate_content(
-                        model="gemini-2.0-flash",
+                        model=get_gemini_model_name(key="resume_analyzer"),
                         contents=prompt,
                         config=GenerateContentConfig(
                             temperature=0.1,
