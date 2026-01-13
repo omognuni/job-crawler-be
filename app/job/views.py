@@ -9,14 +9,48 @@ import logging
 from drf_spectacular.utils import extend_schema
 from job.models import JobPosting
 from job.permissions import HasSimpleSecretKey
-from job.serializers import JobPostingQuerySerializer, JobPostingSerializer
+from job.serializers import (
+    CompanyOptionsQuerySerializer,
+    JobPostingQuerySerializer,
+    JobPostingSerializer,
+)
 from job.services import JobService
 from rest_framework import status
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.views import APIView
 from rest_framework.viewsets import GenericViewSet
 
 logger = logging.getLogger(__name__)
+
+
+class CompanyOptionsView(APIView):
+    """
+    회사명 옵션(typeahead) 조회 (public)
+
+    GET /api/v1/jobs/companies/?q=...&limit=...
+    """
+
+    permission_classes = [AllowAny]
+
+    @extend_schema(
+        parameters=[CompanyOptionsQuerySerializer],
+        responses={status.HTTP_200_OK: list[str]},
+    )
+    def get(self, request, *args, **kwargs):
+        query_serializer = CompanyOptionsQuerySerializer(data=request.query_params)
+        if not query_serializer.is_valid():
+            return Response(
+                {
+                    "error": "Invalid query parameters",
+                    "details": query_serializer.errors,
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        q = query_serializer.validated_data.get("q", "") or ""
+        limit = query_serializer.validated_data.get("limit", 20)
+        return Response(JobService.get_company_options(q=q, limit=limit), status=200)
 
 
 class JobPostingViewSet(GenericViewSet):
@@ -45,7 +79,10 @@ class JobPostingViewSet(GenericViewSet):
             query_serializer = JobPostingQuerySerializer(data=request.query_params)
             if not query_serializer.is_valid():
                 return Response(
-                    {"error": "Invalid query parameters"},
+                    {
+                        "error": "Invalid query parameters",
+                        "details": query_serializer.errors,
+                    },
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
