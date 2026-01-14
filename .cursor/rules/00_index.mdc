@@ -1,0 +1,34 @@
+---
+description: 이 레포의 AI/IDE 공통 규칙 인덱스. 단일 소스는 `.cursor/rules/`.
+alwaysApply: true
+---
+
+## 목적
+- 이 레포에서 AI/IDE(Cursor/Claude/Copilot/기타 에이전트)가 **동일한 규칙**을 따르도록 “규칙의 위치/우선순위/적용 조건”을 한 곳에서 안내한다.
+- **Single Source of Truth**: 이 레포의 규칙은 **반드시** `.cursor/rules/`를 기준으로 관리한다.
+
+## 적용 우선순위(권장)
+1) **`global.mdc`**: 항상 적용되는 작업 원칙(uv/compose/Ticket-first/Confluence 등)
+2) **`architecture.mdc`**: 레이어/DI/테스트 부수효과/Request-ID 등 구조 규칙(해당 작업에 관련될 때)
+3) **`python_django.mdc`**: Python/Django/DRF 구현 규칙(Python 코드 변경 시)
+4) **`ticket.mdc`**: Jira 티켓 작성/수정이 목적일 때만 적용(드라이브바이 수정은 예외)
+
+## 파일별 요약
+- **`global.mdc`**
+  - 명령 실행은 컨테이너에서 `uv` 사용
+  - 작업 전 `docker-compose.yml` 확인
+  - Ticket-first(Atlassian MCP로 티켓 확인/없으면 생성 기준)
+  - Markdown 문서 변경 시 Confluence 반영(Atlassian MCP)
+- **`architecture.mdc`**
+  - `views -> services(thin facade) -> application(usecases) -> ports -> adapters` 의존 방향
+  - DI는 `application/container.py`
+  - 테스트에서 부수효과 비활성
+  - Request-ID 코릴레이션
+- **`python_django.mdc`**
+  - DRF Thin Views/Serializer/Async(Celery)/ENV 규칙
+- **`ticket.mdc`**
+  - Epic/Story/Task 템플릿/AC/DoD/범위/검증/리스크/라벨 규칙
+
+## 다른 IDE/에이전트(진입점)
+- 이 레포에는 Claude/Copilot/기타 에이전트를 위해, **`.cursor/rules`를 참조하는 진입점 파일**을 함께 둔다.
+- 진입점 파일 내용이 `.cursor/rules`와 충돌하면, **`.cursor/rules`가 우선**이다.

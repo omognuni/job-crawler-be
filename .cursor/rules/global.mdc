@@ -4,8 +4,12 @@ alwaysApply: true
 
 # Global Rules
 
+- **Execution Environment Check (ALWAYS)**: 어떤 명령을 실행하기 전에, **현재 환경이 로컬 쉘인지 / 컨테이너 쉘인지 반드시 확인**한 뒤 실행합니다.
+  - 특히 `pytest`, `uv`, `python manage.py ...`, `celery ...`, `docker ...` 류 명령은 습관적으로 로컬에서 치지 말고, **컨테이너 진입 여부부터 확인**합니다.
 - **Command Execution**: 모든 명령어는 항상 컨테이너에서 `uv`를 사용하여 실행해야 합니다.
 - **Configuration Check**: 작업을 수행하기 전에 항상 `docker-compose.yml`을 확인하십시오.
+- **Single Source of Truth (Rules)**: 이 레포의 규칙은 `.cursor/rules/`를 단일 소스로 관리합니다. (개요: `.cursor/rules/00_index.mdc`)
+  - 작업 시작 시 가능하면 `.cursor/rules/00_index.mdc`를 먼저 읽고(우선순위/적용 조건 확인), 이후 세부 규칙을 적용한다.
 - **Ticket First (ALWAYS)**: 모든 작업은 **항상** 시작 전에 Atlassian MCP를 확인하여 현재 프로젝트 명과 유사한 스페이스를 찾아 관련 Jira 티켓이 있는지 확인하고, 있으면 해당 티켓의 **현재 진행 상태/최근 코멘트/블로커**를 확인한 뒤 진행한다.
   - **티켓이 없으면**: 작업 규모/목적이 티켓이 필요한 변경이라면 `.cursor/rules/ticket.mdc` 규칙을 따라 **먼저 티켓을 작성**한 뒤 진행한다.
   - **예외(티켓 생성 금지)**: 티켓이 불필요한 “드라이브바이/사소한 수정”이면 티켓을 만들지 않고 진행한다. (세부 기준은 `.cursor/rules/ticket.mdc`의 “티켓 생성하지 말 것” 항목을 따른다.)

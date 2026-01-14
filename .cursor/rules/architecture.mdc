@@ -4,6 +4,7 @@ alwaysApply: false
 ---
 ## 목적
 이 프로젝트는 “변경에 유연한 구조”를 목표로, 유스케이스 중심(Application) + 포트/어댑터(Ports/Adapters) 스타일로 정리합니다.
+- 상세 문서 소스: `app/ARCHITECTURE.md` (가능하면 이 문서와 동기화)
 
 ## 레이어 규칙(의존 방향)
 - **views (Presentation)**: HTTP 처리만 담당. 비즈니스 로직/DB/외부 연동 금지.
