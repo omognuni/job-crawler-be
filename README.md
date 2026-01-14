@@ -135,6 +135,16 @@ CHROMA_PORT=8000
 # Google AI
 GOOGLE_API_KEY=your-google-api-key
 
+# Google OAuth (Login/Signup)
+# - 기능 플래그: OFF면 OAuth 엔드포인트가 404로 비활성화됩니다.
+GOOGLE_OAUTH_ENABLED=False
+GOOGLE_OAUTH_CLIENT_ID=your-google-oauth-client-id
+GOOGLE_OAUTH_CLIENT_SECRET=your-google-oauth-client-secret
+# 허용된 FE callback URL (정확 일치, 쉼표로 구분)
+GOOGLE_OAUTH_ALLOWED_REDIRECT_URIS=http://localhost:3000/auth/google/callback
+# state/PKCE 유효기간(초)
+GOOGLE_OAUTH_STATE_TTL_SECONDS=600
+
 # API
 API_SECRET_KEY=your-api-secret-key
 ```

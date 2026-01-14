@@ -61,3 +61,20 @@ class UserLoginSerializer(serializers.Serializer):
 
         data["user"] = user
         return data
+
+
+class GoogleOAuthStartSerializer(serializers.Serializer):
+    """
+    Google OAuth 시작 요청 serializer (SCRUM-21)
+    """
+
+    redirect_uri = serializers.URLField(max_length=500)
+
+
+class GoogleOAuthCallbackSerializer(serializers.Serializer):
+    """
+    Google OAuth 콜백 처리 요청 serializer (SCRUM-23)
+    """
+
+    code = serializers.CharField(max_length=2000)
+    state = serializers.CharField(max_length=2000)

@@ -189,6 +189,23 @@ SIMPLE_JWT = {
     "REFRESH_TOKEN_LIFETIME": timedelta(days=1),
 }
 
+# Google OAuth (SCRUM-21~)
+# - 설정값이 없을 수 있으므로 여기서는 강제하지 않습니다(엔드포인트에서 검증).
+GOOGLE_OAUTH_ENABLED = os.getenv("GOOGLE_OAUTH_ENABLED", "False") == "True"
+GOOGLE_OAUTH_CLIENT_ID = os.getenv("GOOGLE_OAUTH_CLIENT_ID")
+GOOGLE_OAUTH_CLIENT_SECRET = os.getenv("GOOGLE_OAUTH_CLIENT_SECRET")
+GOOGLE_OAUTH_ALLOWED_REDIRECT_URIS = [
+    s.strip()
+    for s in os.getenv("GOOGLE_OAUTH_ALLOWED_REDIRECT_URIS", "").split(",")
+    if s.strip()
+]
+try:
+    GOOGLE_OAUTH_STATE_TTL_SECONDS = int(
+        os.getenv("GOOGLE_OAUTH_STATE_TTL_SECONDS", "600")
+    )
+except ValueError:
+    GOOGLE_OAUTH_STATE_TTL_SECONDS = 600
+
 SPECTACULAR_SETTINGS = {
     "TITLE": "Job Crawler API",
     "DESCRIPTION": "API for Job Crawler",

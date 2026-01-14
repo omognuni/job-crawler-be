@@ -55,6 +55,11 @@ DEBUG=False
 ALLOWED_HOSTS=yourdomain.com
 DB_PASS=secure-password
 GOOGLE_API_KEY=your-key
+GOOGLE_OAUTH_ENABLED=False
+GOOGLE_OAUTH_CLIENT_ID=your-google-oauth-client-id
+GOOGLE_OAUTH_CLIENT_SECRET=your-google-oauth-client-secret
+GOOGLE_OAUTH_ALLOWED_REDIRECT_URIS=https://your-frontend.com/auth/google/callback
+GOOGLE_OAUTH_STATE_TTL_SECONDS=600
 CORS_ALLOWED_ORIGINS=https://yourdomain.com
 ```
 
@@ -106,6 +111,7 @@ def my_view(request):
 - 인증 실패 로그
 - 비정상적인 API 요청 패턴 감지
 - 보안 이벤트 알림
+  - Google OAuth 실패 시 토큰/PII가 응답(details)에 포함되지 않도록 주의(서버 로그는 마스킹 처리)
 
 #### 3. 정기 보안 점검
 - 의존성 취약점 스캔: `pip-audit` 또는 `safety`

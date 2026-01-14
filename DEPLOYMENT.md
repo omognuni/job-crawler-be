@@ -66,21 +66,42 @@
    - Google API 키
    - 예: `AIzaSy...`
 
+9. **GOOGLE_OAUTH_ENABLED**
+   - Google OAuth 기능 플래그
+   - `False`면 OAuth 엔드포인트가 404로 비활성화되어 롤백/세이프가드로 사용 가능
+   - 예: `True`
+
+10. **GOOGLE_OAUTH_CLIENT_ID**
+   - Google OAuth Client ID
+   - 예: `1234567890-xxxx.apps.googleusercontent.com`
+
+11. **GOOGLE_OAUTH_CLIENT_SECRET**
+   - Google OAuth Client Secret (절대 로그/응답에 노출 금지)
+   - 예: `GOCSPX-...`
+
+12. **GOOGLE_OAUTH_ALLOWED_REDIRECT_URIS**
+   - 허용된 Redirect URI 화이트리스트(정확 일치, 쉼표로 구분)
+   - 예: `https://your-frontend.com/auth/google/callback,https://staging.your-frontend.com/auth/google/callback`
+
+13. **GOOGLE_OAUTH_STATE_TTL_SECONDS**
+   - state/PKCE 유효기간(초)
+   - 예: `600`
+
 ### SSH Server 배포용 추가 Secrets
 
-9. **SSH_HOST**
+14. **SSH_HOST**
    - SSH 서버 호스트명 또는 IP
    - 예: `your-server.com` 또는 `192.168.1.100`
 
-10. **SSH_USERNAME**
+15. **SSH_USERNAME**
     - SSH 사용자명
     - 예: `ubuntu` 또는 `root`
 
-11. **SSH_PRIVATE_KEY**
+16. **SSH_PRIVATE_KEY**
     - SSH 개인키 (전체 내용)
     - 예: `-----BEGIN OPENSSH PRIVATE KEY-----...`
 
-12. **SSH_PORT** (선택사항)
+17. **SSH_PORT** (선택사항)
     - SSH 포트 (기본값: 22)
     - 예: `22`
 
@@ -179,6 +200,28 @@ curl http://localhost:8000/health/
 - 배포 전 충분한 테스트 수행
 
 ## 🚀 빠른 시작
+
+## ✅ Google OAuth 운영 체크리스트 (SCRUM-29)
+
+### Google Console 설정 체크리스트
+- [ ] OAuth 동의 화면 구성(프로덕션 도메인/브랜딩/스코프 확인)
+- [ ] OAuth Client 생성(Web Application)
+- [ ] 승인된 Redirect URI에 FE 콜백 URL 등록(DEV/STG/PROD)
+- [ ] (필요 시) 승인된 JavaScript origin 등록
+- [ ] 배포 환경별 `client_id/client_secret` 안전하게 저장(Secrets)
+
+### 운영 QA 체크리스트
+- [ ] **플래그 OFF**(`GOOGLE_OAUTH_ENABLED=False`) 시:
+  - [ ] `/api/v1/users/oauth/google/start/` 404
+  - [ ] `/api/v1/users/oauth/google/callback/` 404
+- [ ] **플래그 ON**(`GOOGLE_OAUTH_ENABLED=True`) 시:
+  - [ ] 정상 로그인 성공(redirect → code/state → callback → JWT 발급)
+  - [ ] 사용자 취소/실패 케이스에서 FE/BE가 기대한 에러 코드로 처리되는지 확인
+  - [ ] state mismatch/만료/재사용이 안전하게 실패하는지 확인
+  - [ ] 토큰/PII가 로그/응답에 노출되지 않는지 확인(마스킹/세부사유 미노출)
+
+### 롤백 플랜
+- [ ] 문제가 발생하면 `GOOGLE_OAUTH_ENABLED=False`로 즉시 비활성화(기존 로그인 유지)
 
 ### 1. Docker Registry 배포 (가장 간단)
 1. GitHub Secrets 설정 (공통 필수 Secrets만)
