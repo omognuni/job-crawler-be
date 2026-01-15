@@ -31,5 +31,19 @@ class UserOAuthService:
 
         assert isinstance(result, Ok)
         user = User.objects.get(pk=result.value.user_id)
+        # display_name은 "비어있는 경우"에만 Google name으로 채운다(기존 유저가 직접 설정한 값은 덮어쓰지 않음)
+        if result.value.display_name and not user.display_name:
+            user.display_name = result.value.display_name
+            user.save(update_fields=["display_name"])
         refresh = RefreshToken.for_user(user)
-        return Ok({"refresh": str(refresh), "access": str(refresh.access_token)})
+        return Ok(
+            {
+                "refresh": str(refresh),
+                "access": str(refresh.access_token),
+                "user": {
+                    "id": int(user.id),
+                    "username": user.username,
+                    "display_name": user.display_name,
+                },
+            }
+        )

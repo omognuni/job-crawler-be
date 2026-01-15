@@ -3,8 +3,9 @@ from django.db import models
 
 
 class User(AbstractUser):
-    # Add any custom fields here if needed
-    pass
+    # OAuth 등에서 사람이 보는 이름(닉네임/표시명)으로 사용합니다.
+    # username은 내부 식별용으로 유지하고, display_name은 nullable/optional로 둡니다.
+    display_name = models.CharField(max_length=150, blank=True, null=True)
 
 
 class OAuthAuthorizationRequest(models.Model):

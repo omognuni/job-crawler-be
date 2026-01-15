@@ -81,4 +81,5 @@ class GoogleOAuthHttpClient(GoogleOAuthClientPort):
             sub=str(sub),
             email=payload.get("email"),
             email_verified=bool(payload.get("email_verified", False)),
+            name=payload.get("name"),
         )

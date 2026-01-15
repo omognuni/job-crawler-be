@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 @dataclass(frozen=True, slots=True)
 class GoogleOAuthCallbackResult:
     user_id: int
+    display_name: str | None = None
 
 
 class GoogleOAuthCallbackUseCase:
@@ -109,7 +110,12 @@ class GoogleOAuthCallbackUseCase:
         if isinstance(user_id_result, Err):
             return user_id_result
         assert isinstance(user_id_result, Ok)
-        return Ok(GoogleOAuthCallbackResult(user_id=int(user_id_result.value)))
+        return Ok(
+            GoogleOAuthCallbackResult(
+                user_id=int(user_id_result.value),
+                display_name=userinfo.name,
+            )
+        )
 
 
 def _state_hash(state: str) -> str:

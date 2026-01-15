@@ -119,7 +119,10 @@ class TestGoogleOAuthCallback:
         def fake_userinfo(self, *, access_token):
             assert access_token == "access-token"
             return GoogleUserInfo(
-                sub="sub123", email="u@example.com", email_verified=True
+                sub="sub123",
+                email="u@example.com",
+                email_verified=True,
+                name="User Display",
             )
 
         monkeypatch.setattr(
@@ -135,6 +138,9 @@ class TestGoogleOAuthCallback:
         assert resp.status_code == status.HTTP_200_OK
         assert "refresh" in resp.data
         assert "access" in resp.data
+        assert "user" in resp.data
+        assert resp.data["user"]["username"] == "google_sub123"
+        assert resp.data["user"]["display_name"] == "User Display"
 
         obj = OAuthAuthorizationRequest.objects.get(state="ok")
         assert obj.used_at is not None
