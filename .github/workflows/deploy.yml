@@ -140,6 +140,11 @@ jobs:
             DB_USER=${{ secrets.DB_USER }}
             OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
             GOOGLE_API_KEY=${{ secrets.GOOGLE_API_KEY }}
+            GOOGLE_OAUTH_ENABLED=${{ secrets.GOOGLE_OAUTH_ENABLED }}
+            GOOGLE_OAUTH_CLIENT_ID=${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
+            GOOGLE_OAUTH_CLIENT_SECRET=${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
+            GOOGLE_OAUTH_ALLOWED_REDIRECT_URIS=${{ secrets.GOOGLE_OAUTH_ALLOWED_REDIRECT_URIS }}
+            GOOGLE_OAUTH_STATE_TTL_SECONDS=${{ secrets.GOOGLE_OAUTH_STATE_TTL_SECONDS }}
             PROD_IMAGE_NAME=${PROD_IMAGE}
             SLACK_WEBHOOK_URL=${{ secrets.SLACK_WEBHOOK_URL }}
             CSRF_TRUSTED_ORIGINS=${{ secrets.CSRF_TRUSTED_ORIGINS }}
