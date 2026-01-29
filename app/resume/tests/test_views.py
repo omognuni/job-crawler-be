@@ -9,6 +9,7 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 from rest_framework import status
 from rest_framework.test import APIClient
+from resume import views as resume_views
 from resume.models import Resume
 
 User = get_user_model()
@@ -113,7 +114,7 @@ class TestResumeViewSet:
         assert response.status_code == status.HTTP_204_NO_CONTENT
         assert not Resume.objects.filter(id=resume.id).exists()
 
-    def test_analyze_resume(self):
+    def test_analyze_resume(self, monkeypatch):
         """이력서 분석"""
         # Given
         resume = Resume.objects.create(
@@ -121,9 +122,19 @@ class TestResumeViewSet:
             content="Java, Spring, 3년",
         )
 
+        class DummyAsyncResult:
+            def __init__(self, task_id: str):
+                self.id = task_id
+
+        def fake_delay(resume_id: int):
+            assert resume_id == resume.id
+            return DummyAsyncResult(task_id="dummy-task-id")
+
+        monkeypatch.setattr(resume_views.process_resume, "delay", fake_delay)
+
         # When
         response = self.client.get(f"/api/v1/resumes/{resume.id}/analyze/")
 
         # Then
         assert response.status_code == status.HTTP_202_ACCEPTED
-        assert "task_id" in response.data
+        assert response.data["task_id"] == "dummy-task-id"
