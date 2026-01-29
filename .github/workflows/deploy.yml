@@ -77,6 +77,15 @@ jobs:
           DB_PASS: test_password
           SECRET_KEY: test-secret-key-for-ci
           API_SECRET_KEY: test-api-secret-key
+          NEO4J_PASSWORD: test-neo4j-password
+          OPENAI_API_KEY: test-openai-api-key
+          GOOGLE_API_KEY: test-google-api-key
+          GOOGLE_OAUTH_ENABLED: test-google-oauth-enabled
+          GOOGLE_OAUTH_CLIENT_ID: test-google-oauth-client-id
+          GOOGLE_OAUTH_CLIENT_SECRET: test-google-oauth-client-secret
+          GOOGLE_OAUTH_ALLOWED_REDIRECT_URIS: test-google-oauth-allowed-redirect-uris
+          GOOGLE_OAUTH_STATE_TTL_SECONDS: test-google-oauth-state-ttl-seconds
+          CSRF_TRUSTED_ORIGINS: test-csrf-trusted-origins
           DEBUG: "True"
           ALLOWED_HOSTS: "*"
         working-directory: ./app
