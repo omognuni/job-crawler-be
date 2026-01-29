@@ -1,3 +1,0 @@
-"""
-Search app tests
-"""
