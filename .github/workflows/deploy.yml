@@ -76,6 +76,7 @@ jobs:
           DB_USER: test_user
           DB_PASS: test_password
           SECRET_KEY: test-secret-key-for-ci
+          API_SECRET_KEY: test-api-secret-key
           DEBUG: "True"
           ALLOWED_HOSTS: "*"
         working-directory: ./app
