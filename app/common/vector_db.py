@@ -1,8 +1,12 @@
+import os
+
 import chromadb
 from chromadb.utils import embedding_functions
 
 
 class VectorDB:
+    _instance = None
+
     def __init__(self, host="chromadb", port=8000):
         self.client = chromadb.HttpClient(host=host, port=port)
         self.embedding_function = (
@@ -15,6 +19,14 @@ class VectorDB:
         return self.client.get_or_create_collection(
             name=name, embedding_function=self.embedding_function
         )
+
+    @classmethod
+    def get_instance(cls):
+        if cls._instance is None:
+            host = os.getenv("CHROMA_HOST", "chromadb")
+            port = int(os.getenv("CHROMA_PORT", 8000))
+            cls._instance = VectorDB(host=host, port=port)
+        return cls._instance
 
     def upsert_documents(self, collection, documents, metadatas, ids):
         collection.upsert(
@@ -163,7 +175,3 @@ class VectorDB:
             }
 
         return results
-
-
-# Singleton instance
-vector_db_client = VectorDB(host="chromadb", port=8000)

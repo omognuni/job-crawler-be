@@ -39,7 +39,7 @@ urlpatterns = [
     path("api/v1/jobs/", include("job.urls")),
     path("api/v1/users/", include("user.urls")),
     path("api/v1/skills/", include("skill.urls")),
-    path("api/v1/search/", include("search.urls")),
+    # path("api/v1/search/", include("search.urls")),
     path("api/v1/resumes/", include("resume.urls")),
     path("api/v1/recommendations/", include("recommendation.urls")),
     # Health Check

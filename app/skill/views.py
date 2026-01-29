@@ -4,7 +4,7 @@ Skill Views
 스킬 관련 API 뷰
 """
 
-from common.graph_db import graph_db_client
+from common.graph_db import GraphDBClient
 from drf_spectacular.utils import extend_schema
 from job.models import JobPosting
 from job.serializers import JobPostingSerializer
@@ -49,7 +49,7 @@ class RelatedJobsBySkillView(APIView):
     )
     def get(self, request, skill_name: str):
         # Neo4j에서 스킬 관련 공고 ID 조회
-        posting_ids = graph_db_client.get_jobs_related_to_skill(skill_name)
+        posting_ids = GraphDBClient.get_instance().get_jobs_related_to_skill(skill_name)
 
         if not posting_ids:
             return Response([], status=200)

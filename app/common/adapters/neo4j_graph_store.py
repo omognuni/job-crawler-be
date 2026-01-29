@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from common.graph_db import graph_db_client
+from common.graph_db import GraphDBClient
 
 
 class Neo4jGraphStore:
@@ -20,7 +20,7 @@ class Neo4jGraphStore:
     ) -> None:
         if not skills_required:
             return
-        graph_db_client.add_job_posting(
+        GraphDBClient.get_instance().add_job_posting(
             posting_id=posting_id,
             position=position,
             company_name=company_name,
@@ -32,7 +32,9 @@ class Neo4jGraphStore:
         MATCH (jp:JobPosting {posting_id: $posting_id})-[:REQUIRES_SKILL]->(skill:Skill)
         RETURN skill.name AS skill_name
         """
-        result = graph_db_client.execute_query(query, {"posting_id": posting_id})
+        result = GraphDBClient.get_instance().execute_query(
+            query, {"posting_id": posting_id}
+        )
         return {record["skill_name"] for record in result} if result else set()
 
     def get_postings_by_skills(
@@ -47,7 +49,7 @@ class Neo4jGraphStore:
         ORDER BY match_count DESC, jp.posting_id DESC
         LIMIT $limit
         """
-        result = graph_db_client.execute_query(
+        result = GraphDBClient.get_instance().execute_query(
             query, {"user_skills": list(user_skills), "limit": limit}
         )
         if not result:
@@ -55,4 +57,4 @@ class Neo4jGraphStore:
         return [record["posting_id"] for record in result if "posting_id" in record]
 
     def get_skill_statistics(self, *, skill_name: str | None = None) -> dict:
-        return graph_db_client.get_skill_statistics(skill_name)
+        return GraphDBClient.get_instance().get_skill_statistics(skill_name)

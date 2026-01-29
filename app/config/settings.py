@@ -59,7 +59,7 @@ INSTALLED_APPS = [
     "job.apps.JobConfig",
     "user",
     "skill.apps.SkillConfig",
-    "search.apps.SearchConfig",
+    # "search.apps.SearchConfig",
     "resume.apps.ResumeConfig",
     "recommendation.apps.RecommendationConfig",
     "common",

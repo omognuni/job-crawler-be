@@ -8,6 +8,16 @@ class GraphDBClient:
     def __init__(self, uri, user, password):
         self._driver = GraphDatabase.driver(uri, auth=(user, password))
 
+    @classmethod
+    def get_instance(cls):
+        if cls._instance is None:
+            cls._instance = GraphDBClient(
+                uri=settings.NEO4J_URI,
+                user=settings.NEO4J_USER,
+                password=settings.NEO4J_PASSWORD,
+            )
+        return cls._instance
+
     def close(self):
         self._driver.close()
 
@@ -246,16 +256,3 @@ class GraphDBClient:
 
         with self._driver.session() as session:
             session.run(index_query)
-
-
-# Singleton instance
-# Credentials loaded from environment variables via settings
-def _get_graph_db_client():
-    """Factory function to create GraphDB client with settings"""
-    neo4j_uri = settings.NEO4J_URI
-    neo4j_user = settings.NEO4J_USER
-    neo4j_password = settings.NEO4J_PASSWORD
-    return GraphDBClient(neo4j_uri, neo4j_user, neo4j_password)
-
-
-graph_db_client = _get_graph_db_client()

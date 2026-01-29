@@ -89,7 +89,7 @@ class TestGoogleOAuthCallback:
         assert resp.status_code == status.HTTP_400_BAD_REQUEST
         assert resp.data["error_code"] == "STATE_ALREADY_USED"
 
-    def test_callback_success_issues_jwt_and_marks_state_used(
+    def test_callback_success_sets_jwt_cookies_and_marks_state_used(
         self, settings, monkeypatch
     ):
         settings.GOOGLE_OAUTH_ENABLED = True
@@ -136,11 +136,19 @@ class TestGoogleOAuthCallback:
             format="json",
         )
         assert resp.status_code == status.HTTP_200_OK
-        assert "refresh" in resp.data
-        assert "access" in resp.data
+        # 응답 body에는 토큰 대신 사용자 정보만 포함되고,
+        # JWT 토큰은 HttpOnly Cookie로 설정된다.
         assert "user" in resp.data
         assert resp.data["user"]["username"] == "google_sub123"
         assert resp.data["user"]["display_name"] == "User Display"
+
+        # JWT 쿠키가 설정되었는지 확인
+        access_cookie = resp.cookies.get("access_token")
+        refresh_cookie = resp.cookies.get("refresh_token")
+        assert access_cookie is not None
+        assert refresh_cookie is not None
+        assert access_cookie.value
+        assert refresh_cookie.value
 
         obj = OAuthAuthorizationRequest.objects.get(state="ok")
         assert obj.used_at is not None

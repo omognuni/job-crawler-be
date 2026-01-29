@@ -2,14 +2,14 @@ from __future__ import annotations
 
 from typing import Any, Optional
 
-from common.vector_db import vector_db_client
+from common.vector_db import VectorDB
 
 
 class ChromaVectorStore:
     """
     ChromaDB(Vector DB) 어댑터.
 
-    - 내부적으로는 기존 `common.vector_db.vector_db_client`를 그대로 사용합니다.
+    - 내부적으로는 기존 `common.vector_db.VectorDB`를 그대로 사용합니다.
     - 유스케이스 레이어는 ChromaDB를 직접 알지 않고 이 어댑터(=VectorStorePort 구현)만 의존합니다.
     """
 
@@ -21,8 +21,8 @@ class ChromaVectorStore:
         text: str,
         metadata: dict,
     ) -> None:
-        collection = vector_db_client.get_or_create_collection(collection_name)
-        vector_db_client.upsert_documents(
+        collection = VectorDB.get_instance().get_or_create_collection(collection_name)
+        VectorDB.get_instance().upsert_documents(
             collection=collection,
             documents=[text],
             metadatas=[metadata],
@@ -30,7 +30,7 @@ class ChromaVectorStore:
         )
 
     def get_embedding(self, *, collection_name: str, doc_id: str) -> Optional[Any]:
-        collection = vector_db_client.get_or_create_collection(collection_name)
+        collection = VectorDB.get_instance().get_or_create_collection(collection_name)
         result = collection.get(ids=[doc_id], include=["embeddings"])
         if not result:
             return None
@@ -52,9 +52,9 @@ class ChromaVectorStore:
         min_similarity: Optional[float] = None,
         where: Optional[dict] = None,
     ) -> dict:
-        collection = vector_db_client.get_or_create_collection(collection_name)
+        collection = VectorDB.get_instance().get_or_create_collection(collection_name)
         # vector_db_client.query_by_embedding은 "리스트 형태" 임베딩을 기대합니다.
-        return vector_db_client.query_by_embedding(
+        return VectorDB.get_instance().query_by_embedding(
             collection=collection,
             query_embeddings=[query_embedding],
             n_results=n_results,
@@ -71,8 +71,8 @@ class ChromaVectorStore:
         min_similarity: Optional[float] = None,
         where: Optional[dict] = None,
     ) -> dict:
-        collection = vector_db_client.get_or_create_collection(collection_name)
-        return vector_db_client.query(
+        collection = VectorDB.get_instance().get_or_create_collection(collection_name)
+        return VectorDB.get_instance().query(
             collection=collection,
             query_texts=[query_text],
             n_results=n_results,

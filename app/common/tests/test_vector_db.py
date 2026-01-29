@@ -2,7 +2,7 @@ import unittest
 from unittest.mock import MagicMock, patch
 
 # Import VectorDB and vector_db_client here to ensure the singleton is created
-from common.vector_db import VectorDB, vector_db_client
+from common.vector_db import VectorDB
 
 
 class TestVectorDB(unittest.TestCase):
@@ -12,9 +12,9 @@ class TestVectorDB(unittest.TestCase):
     def setUp(self, MockEmbeddingFunction, MockHttpClient):
         # Store the original client and embedding function of the singleton
         # so we can restore them after the test
-        self._original_vector_db_client_client = vector_db_client.client
+        self._original_vector_db_client_client = VectorDB.get_instance().client
         self._original_vector_db_client_embedding_function = (
-            vector_db_client.embedding_function
+            VectorDB.get_instance().embedding_function
         )
 
         # Create mocks
@@ -22,8 +22,8 @@ class TestVectorDB(unittest.TestCase):
         self.mock_embedding_function = MockEmbeddingFunction.return_value
 
         # Patch the singleton instance's client and embedding_function attributes
-        vector_db_client.client = self.mock_client
-        vector_db_client.embedding_function = self.mock_embedding_function
+        VectorDB.get_instance().client = self.mock_client
+        VectorDB.get_instance().embedding_function = self.mock_embedding_function
 
         # Also patch the VectorDB.__init__ method to prevent it from
         # creating a real HttpClient when VectorDB() is called within tests
@@ -41,8 +41,8 @@ class TestVectorDB(unittest.TestCase):
         # Stop the patcher for VectorDB.__init__
         self.patcher_init.stop()
         # Restore the original client and embedding function to the singleton
-        vector_db_client.client = self._original_vector_db_client_client
-        vector_db_client.embedding_function = (
+        VectorDB.get_instance().client = self._original_vector_db_client_client
+        VectorDB.get_instance().embedding_function = (
             self._original_vector_db_client_embedding_function
         )
 
@@ -106,7 +106,7 @@ class TestVectorDB(unittest.TestCase):
 
     def test_singleton_instance(self):
         # Ensure that vector_db_client is an instance of VectorDB
-        self.assertIsInstance(vector_db_client, VectorDB)
+        self.assertIsInstance(VectorDB.get_instance(), VectorDB)
 
         # Ensure that subsequent calls to VectorDB() return the same instance
         # (This test is more about the singleton pattern itself, which is handled by Python's module caching)
@@ -116,9 +116,9 @@ class TestVectorDB(unittest.TestCase):
         # create a new HttpClient.
         # The important part is that the *globally accessible* vector_db_client
         # has its internal client and embedding_function set to our mocks.
-        self.assertEqual(vector_db_client.client, self.mock_client)
+        self.assertEqual(VectorDB.get_instance().client, self.mock_client)
         self.assertEqual(
-            vector_db_client.embedding_function, self.mock_embedding_function
+            VectorDB.get_instance().embedding_function, self.mock_embedding_function
         )
 
 
