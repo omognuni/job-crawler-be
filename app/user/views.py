@@ -1,9 +1,12 @@
 from common.application.result import Err, Ok
+from common.jwt_cookies import delete_jwt_cookies, set_jwt_cookies
+from django.conf import settings
 from drf_spectacular.utils import OpenApiTypes, extend_schema
 from rest_framework import generics, status
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
 from rest_framework_simplejwt.tokens import RefreshToken
 from user.serializers import (
     GoogleOAuthCallbackSerializer,
@@ -16,19 +19,17 @@ from user.services import UserOAuthService
 
 class UserRegistrationView(generics.CreateAPIView):
     serializer_class = UserRegistrationSerializer
-    permission_classes = []  # No permission required for registration
+    permission_classes = []
 
 
 class UserLoginView(APIView):
-    permission_classes = []  # No permission required for login
+    permission_classes = []
 
     @extend_schema(
         request=UserLoginSerializer,
-        responses={
-            200: OpenApiTypes.OBJECT,  # Or define a serializer for the response if needed
-        },
+        responses={200: OpenApiTypes.OBJECT},
         summary="User Login",
-        description="Login with email and password to get JWT tokens.",
+        description="Login with email and password. JWT is set as HttpOnly cookies.",
     )
     def post(self, request):
         serializer = UserLoginSerializer(
@@ -37,13 +38,83 @@ class UserLoginView(APIView):
         serializer.is_valid(raise_exception=True)
         user = serializer.validated_data["user"]
         refresh = RefreshToken.for_user(user)
-        return Response(
+        response = Response(
             {
-                "refresh": str(refresh),
-                "access": str(refresh.access_token),
+                "message": "Login successful",
+                "user": {
+                    "id": user.id,
+                    "username": user.username,
+                    "display_name": getattr(user, "display_name", None),
+                },
             },
             status=status.HTTP_200_OK,
         )
+        return set_jwt_cookies(
+            response,
+            access_token=str(refresh.access_token),
+            refresh_token=str(refresh),
+        )
+
+
+class UserLogoutView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        responses={200: OpenApiTypes.OBJECT},
+        summary="User Logout",
+        description="Clear JWT cookies.",
+    )
+    def post(self, request):
+        response = Response(
+            {"message": "Logout successful"},
+            status=status.HTTP_200_OK,
+        )
+        return delete_jwt_cookies(response)
+
+
+class TokenRefreshCookieView(APIView):
+    """Refresh access token from HttpOnly refresh_token cookie."""
+
+    permission_classes = [AllowAny]
+
+    @extend_schema(
+        responses={200: OpenApiTypes.OBJECT},
+        summary="Refresh Token",
+        description="Refresh access token using refresh_token cookie.",
+    )
+    def post(self, request):
+        refresh_name = getattr(settings, "JWT_AUTH_REFRESH_COOKIE", "refresh_token")
+        raw = request.COOKIES.get(refresh_name)
+        if not raw:
+            return Response(
+                {"error": "Refresh token not found in cookies"},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
+        try:
+            refresh = RefreshToken(raw)
+            access = str(refresh.access_token)
+            response = Response(
+                {"message": "Token refreshed"},
+                status=status.HTTP_200_OK,
+            )
+            response.set_cookie(
+                key=getattr(settings, "JWT_AUTH_COOKIE", "access_token"),
+                value=access,
+                httponly=getattr(settings, "JWT_AUTH_COOKIE_HTTP_ONLY", True),
+                secure=getattr(settings, "JWT_AUTH_COOKIE_SECURE", not settings.DEBUG),
+                samesite=getattr(settings, "JWT_AUTH_COOKIE_SAMESITE", "Lax"),
+                path=getattr(settings, "JWT_AUTH_COOKIE_PATH", "/"),
+                domain=getattr(settings, "JWT_AUTH_COOKIE_DOMAIN", None),
+                max_age=int(
+                    settings.SIMPLE_JWT["ACCESS_TOKEN_LIFETIME"].total_seconds()
+                ),
+            )
+            return response
+        except (InvalidToken, TokenError):
+            return Response(
+                {"error": "Invalid or expired refresh token"},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
 
 
 class GoogleOAuthStartView(APIView):
@@ -106,7 +177,7 @@ class GoogleOAuthCallbackView(APIView):
         request=GoogleOAuthCallbackSerializer,
         responses={200: OpenApiTypes.OBJECT},
         summary="Google OAuth Callback",
-        description="Validate state, exchange code for token, fetch userinfo, and issue JWT tokens.",
+        description="Validate state, exchange code for token, fetch userinfo, and issue JWT as HttpOnly cookies.",
     )
     def post(self, request):
         serializer = GoogleOAuthCallbackSerializer(data=request.data)
@@ -132,4 +203,13 @@ class GoogleOAuthCallbackView(APIView):
             )
 
         assert isinstance(result, Ok)
-        return Response(result.value, status=status.HTTP_200_OK)
+        data = result.value
+        response = Response(
+            {"message": "OAuth login successful", "user": data.get("user")},
+            status=status.HTTP_200_OK,
+        )
+        return set_jwt_cookies(
+            response,
+            access_token=data["access"],
+            refresh_token=data["refresh"],
+        )

@@ -180,7 +180,7 @@ REST_FRAMEWORK = {
         "rest_framework.permissions.IsAuthenticated",
     ],
     "DEFAULT_AUTHENTICATION_CLASSES": (
-        "rest_framework_simplejwt.authentication.JWTAuthentication",
+        "common.authentication.JWTCookieAuthentication",
     ),
 }
 
@@ -188,6 +188,15 @@ SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(minutes=5),
     "REFRESH_TOKEN_LIFETIME": timedelta(days=1),
 }
+
+# JWT HttpOnly Cookie (SCRUM-34, XSS 방어)
+JWT_AUTH_COOKIE = "access_token"
+JWT_AUTH_REFRESH_COOKIE = "refresh_token"
+JWT_AUTH_COOKIE_HTTP_ONLY = True
+JWT_AUTH_COOKIE_SECURE = not DEBUG
+JWT_AUTH_COOKIE_SAMESITE = "Lax"
+JWT_AUTH_COOKIE_PATH = "/"
+JWT_AUTH_COOKIE_DOMAIN = None
 
 # Google OAuth (SCRUM-21~)
 # - 설정값이 없을 수 있으므로 여기서는 강제하지 않습니다(엔드포인트에서 검증).

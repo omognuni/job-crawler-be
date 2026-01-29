@@ -433,32 +433,22 @@ job-crawler-be/
 
 ## 개발 가이드
 
-### 레이어별 책임
+### Service Layer 패턴
 
-| 레이어 | 책임 | 금지 사항 |
-|--------|------|----------|
-| **Views** | HTTP 요청/응답 처리 | 비즈니스 로직, DB 직접 접근 |
-| **Services** | Thin Facade (UseCase 호출) | 복잡한 로직 |
-| **Application/UseCases** | 오케스트레이션 | DB/외부 SDK 직접 import |
-| **Domain** | 순수 로직 (점수 계산 등) | Django, 외부 I/O |
-| **Adapters** | 구체 구현 (ORM, API) | 비즈니스 로직 |
-
-### DI(의존성 주입) 패턴
-
-각 앱의 `application/container.py`에서 UseCase를 조립합니다:
+모든 비즈니스 로직은 Service Layer에 구현합니다:
 
 ```python
-# resume/application/container.py
-def build_process_resume_usecase() -> ProcessResumeUseCase:
-    return ProcessResumeUseCase(
-        resume_repo=DjangoResumeRepo(),
-        resume_analyzer=GoogleGenaiResumeAnalyzer(),
-        vector_store=ChromaVectorStore(),
-    )
+# ❌ Bad: View에 비즈니스 로직
+class JobPostingViewSet(ModelViewSet):
+    def create(self, request):
+        # 복잡한 비즈니스 로직...
+        pass
 
-# services.py, tasks.py에서 사용
-usecase = build_process_resume_usecase()
-usecase.execute(resume_id)
+# ✅ Good: Service에 비즈니스 로직
+class JobPostingViewSet(ModelViewSet):
+    def create(self, request):
+        posting = JobService.create_job_posting(data)
+        return Response(serializer.data)
 ```
 
 ### Thin Controller 원칙
@@ -471,7 +461,7 @@ def create(self, request):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        # Service(→UseCase)에 위임
+        # Service에 위임
         job_posting = JobService.create_job_posting(
             serializer.validated_data
         )
@@ -486,18 +476,6 @@ def create(self, request):
             {"error": "Failed to create"},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
-```
-
-### 테스트에서 부수효과 비활성화
-
-테스트 시 모델 `save()`의 자동 처리(Celery 스케줄링)를 끕니다:
-
-```python
-# app/conftest.py (autouse fixture)
-@pytest.fixture(autouse=True)
-def disable_auto_processing(settings):
-    settings.AUTO_PROCESS_RESUME_ON_SAVE = False
-    settings.AUTO_PROCESS_JOB_ON_SAVE = False
 ```
 
 ## 성능 지표
